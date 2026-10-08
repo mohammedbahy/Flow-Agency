@@ -1,0 +1,76 @@
+// Agency Management System — Sprint-0 foundation schema.
+// Only auth-foundation entities. Domain entities (Client, Brand, Project,
+// Task, Content, Review, Notification, Analytics…) arrive incrementally
+// with their feature sprints.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique // e.g. "users.read"
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique // e.g. "admin", "manager", "member"
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  assignedAt   DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  // NOTE: dev-seed placeholder hash only. Sprint 1 implements real
+  // bcrypt/argon2 password hashing. Never store plaintext passwords.
+  passwordHash String
+  firstName    String?
+  lastName     String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  roles        UserRole[]
+
+  @@map("users")
+}
+
+model UserRole {
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}

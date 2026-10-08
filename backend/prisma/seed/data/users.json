@@ -1,0 +1,23 @@
+[
+  {
+    "email": "admin@example.com",
+    "firstName": "Ada",
+    "lastName": "Admin",
+    "passwordHash": "DEV_ONLY_HASH_admin123",
+    "roles": ["admin"]
+  },
+  {
+    "email": "manager@example.com",
+    "firstName": "Max",
+    "lastName": "Manager",
+    "passwordHash": "DEV_ONLY_HASH_manager123",
+    "roles": ["manager"]
+  },
+  {
+    "email": "member@example.com",
+    "firstName": "Mia",
+    "lastName": "Member",
+    "passwordHash": "DEV_ONLY_HASH_member123",
+    "roles": ["member"]
+  }
+]

@@ -1,0 +1,12 @@
+[
+  { "key": "users.read", "description": "View users" },
+  { "key": "users.write", "description": "Create and update users" },
+  { "key": "roles.read", "description": "View roles" },
+  { "key": "roles.write", "description": "Create and update roles" },
+  { "key": "clients.read", "description": "View clients" },
+  { "key": "clients.write", "description": "Create and update clients" },
+  { "key": "brands.read", "description": "View brands" },
+  { "key": "brands.write", "description": "Create and update brands" },
+  { "key": "teams.read", "description": "View teams" },
+  { "key": "teams.write", "description": "Create and update teams" }
+]
