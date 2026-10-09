@@ -1,5 +1,6 @@
 // Authentication feature barrel (Sprint 1 UI preview).
 export { LoginPage } from './pages/LoginPage';
+export { AdminLoginPage } from './pages/AdminLoginPage';
 export { LoginForm } from './components/LoginForm';
 export { mockSignIn } from './services/auth.mock';
 export { validateLoginForm } from './types/auth.types';

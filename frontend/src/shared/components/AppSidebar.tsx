@@ -20,10 +20,7 @@ import FolderIcon from '@mui/icons-material/Folder';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import PersonIcon from '@mui/icons-material/Person';
 import ArticleIcon from '@mui/icons-material/Article';
-import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import RateReviewIcon from '@mui/icons-material/RateReview';
-import AnalyticsIcon from '@mui/icons-material/Analytics';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import KeyIcon from '@mui/icons-material/Key';
@@ -48,30 +45,39 @@ interface NavEntry {
   future?: boolean;
 }
 
-const MAIN_NAV: NavEntry[] = [
+const OVERVIEW_NAV: NavEntry[] = [
   { label: 'Dashboard', icon: <DashboardIcon />, to: '/dashboard' },
-  { label: 'Clients', icon: <BusinessIcon />, future: true },
-  { label: 'Brands', icon: <StyleIcon />, future: true },
-  { label: 'Teams', icon: <DiversityIcon />, future: true },
+];
+
+const CLIENTS_NAV: NavEntry[] = [
+  { label: 'Clients', icon: <BusinessIcon />, to: '/clients' },
+  { label: 'Brand Performance', icon: <StyleIcon />, to: '/brand-performance' },
+];
+
+const DELIVERY_NAV: NavEntry[] = [
   { label: 'Projects', icon: <FolderIcon />, future: true },
-  { label: 'Tasks', icon: <ChecklistIcon />, badge: 14, future: true },
-  { label: 'My Tasks', icon: <PersonIcon />, future: true },
-  { label: 'Content', icon: <ArticleIcon />, future: true },
-  { label: 'Content Library', icon: <LibraryBooksIcon />, future: true },
-  { label: 'Content Plans', icon: <CalendarMonthIcon />, future: true },
+  { label: 'Tasks', icon: <ChecklistIcon />, to: '/tasks', badge: 2, badgeTone: 'error' },
   { label: 'Reviews', icon: <RateReviewIcon />, to: '/reviews', badge: 4, badgeTone: 'primary' },
-  { label: 'Analytics', icon: <AnalyticsIcon />, future: true },
+];
+
+const TEAMS_NAV: NavEntry[] = [
+  { label: 'Teams', icon: <DiversityIcon />, to: '/teams' },
+  { label: 'My Tasks', icon: <PersonIcon />, future: true },
+];
+
+const CONTENT_NAV: NavEntry[] = [
+  { label: 'Content', icon: <ArticleIcon />, future: true },
 ];
 
 const ADMIN_NAV: NavEntry[] = [
-  { label: 'Notifications', icon: <NotificationsIcon />, badge: 9, badgeTone: 'error', future: true },
   { label: 'Users & Teams', icon: <ManageAccountsIcon />, to: '/users' },
-  { label: 'Roles & Permissions', icon: <KeyIcon />, to: '/users?tab=roles' },
+  { label: 'Roles & Permissions', icon: <KeyIcon />, to: '/roles' },
+  { label: 'Notifications', icon: <NotificationsIcon />, badge: 9, badgeTone: 'error', future: true },
 ];
 
 const UTILITY_NAV: NavEntry[] = [
-  { label: 'Settings', icon: <SettingsIcon />, future: true },
-  { label: 'Profile', icon: <AccountCircleIcon />, future: true },
+  { label: 'Settings', icon: <SettingsIcon />, to: '/settings' },
+  { label: 'Profile', icon: <AccountCircleIcon />, to: '/profile' },
   { label: 'Documentation', icon: <DescriptionIcon />, future: true },
 ];
 
@@ -190,8 +196,14 @@ function SidebarContent({
           justifyContent: collapsed ? 'center' : 'flex-start',
         }}
       >
-        <Avatar sx={{ bgcolor: kineticPalette.primary, borderRadius: 2, fontWeight: 800 }} variant="rounded" aria-hidden>
-          A
+        <Avatar
+          sx={{ bgcolor: '#FFFFFF', borderRadius: 2, fontWeight: 800 }}
+          variant="rounded"
+          aria-hidden
+          src="/neurteq-icon.svg"
+          alt="Neurteq"
+        >
+          N
         </Avatar>
         {!collapsed ? (
           <Box>
@@ -206,10 +218,14 @@ function SidebarContent({
       </Box>
       <Divider />
       <List sx={{ px: collapsed ? 1 : 1.5, py: 1, overflowY: 'auto', flex: 1 }}>
-        <NavSection title="Main" entries={MAIN_NAV} collapsed={collapsed} current={current} />
+        <NavSection title="Overview" entries={OVERVIEW_NAV} collapsed={collapsed} current={current} />
+        <NavSection title="Clients & Brands" entries={CLIENTS_NAV} collapsed={collapsed} current={current} />
+        <NavSection title="Delivery" entries={DELIVERY_NAV} collapsed={collapsed} current={current} />
+        <NavSection title="Teams & People" entries={TEAMS_NAV} collapsed={collapsed} current={current} />
+        <NavSection title="Content" entries={CONTENT_NAV} collapsed={collapsed} current={current} />
         <NavSection title="Administration" entries={ADMIN_NAV} collapsed={collapsed} current={current} />
         <Box sx={{ mt: 1 }}>
-          <NavSection title="" entries={UTILITY_NAV} collapsed={collapsed} current={current} />
+          <NavSection title="Workspace" entries={UTILITY_NAV} collapsed={collapsed} current={current} />
         </Box>
       </List>
       <Divider />

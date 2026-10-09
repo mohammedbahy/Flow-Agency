@@ -21,6 +21,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import SearchIcon from '@mui/icons-material/Search';
 import { kineticPalette } from '../../core/theme/tokens';
 import { DEMO_USER } from './workspace';
+import { Link as RouterLink } from 'react-router-dom';
 
 interface AppTopBarProps {
   onMenuClick: () => void;
@@ -117,7 +118,11 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             </Typography>
           </MenuItem>
         </Menu>
-        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.25, pl: 0.5 }}>
+        <Box
+          component={RouterLink}
+          to="/profile"
+          sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.25, pl: 0.5, textDecoration: 'none', color: 'inherit' }}
+        >
           <Avatar sx={{ bgcolor: kineticPalette.primary }}>{DEMO_USER.initials}</Avatar>
           <Box sx={{ lineHeight: 1.2 }}>
             <Typography variant="body2" fontWeight={700} noWrap>

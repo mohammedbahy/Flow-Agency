@@ -7,7 +7,7 @@ export function HomePage() {
     <Box sx={{ display: 'flex', justifyContent: 'center' }}>
       <Paper sx={{ p: 4, maxWidth: 640, width: '100%' }} elevation={2}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Agency Management System
+          Neurteq Agency Management
         </Typography>
         <Typography variant="body1" color="text.secondary" gutterBottom>
           Sprint 1 UI preview — screens are openly reviewable (no sign-in

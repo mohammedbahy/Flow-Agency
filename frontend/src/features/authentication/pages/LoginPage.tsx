@@ -64,8 +64,8 @@ function BrandPanel() {
         }}
       />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, position: 'relative' }}>
-        <Avatar sx={{ bgcolor: kineticPalette.primary, borderRadius: 2, fontWeight: 800 }} variant="rounded" aria-hidden>
-          A
+        <Avatar sx={{ bgcolor: '#FFFFFF', borderRadius: 2, fontWeight: 800 }} variant="rounded" aria-hidden src="/neurteq-icon.svg" alt="Neurteq">
+          N
         </Avatar>
         <Typography variant="h6" fontWeight={800}>
           {PRODUCT_NAME}

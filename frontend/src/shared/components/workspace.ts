@@ -10,5 +10,5 @@ export const DEMO_USER = {
   initials: 'ER',
 } as const;
 
-export const PRODUCT_NAME = 'AgencyOS';
-export const PRODUCT_EDITION = 'Pro Agency';
+export const PRODUCT_NAME = 'Neurteq';
+export const PRODUCT_EDITION = 'Agency Management';
