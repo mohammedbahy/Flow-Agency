@@ -1,5 +1,0 @@
-[
-  { "name": "admin", "description": "Full system access (development seed)" },
-  { "name": "manager", "description": "Manages clients, brands and teams" },
-  { "name": "member", "description": "Standard team member" }
-]
