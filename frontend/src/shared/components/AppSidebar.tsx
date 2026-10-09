@@ -18,7 +18,6 @@ import StyleIcon from '@mui/icons-material/Style';
 import DiversityIcon from '@mui/icons-material/Diversity3';
 import FolderIcon from '@mui/icons-material/Folder';
 import ChecklistIcon from '@mui/icons-material/Checklist';
-import PersonIcon from '@mui/icons-material/Person';
 import ArticleIcon from '@mui/icons-material/Article';
 import RateReviewIcon from '@mui/icons-material/RateReview';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -62,7 +61,6 @@ const DELIVERY_NAV: NavEntry[] = [
 
 const TEAMS_NAV: NavEntry[] = [
   { label: 'Teams', icon: <DiversityIcon />, to: '/teams' },
-  { label: 'My Tasks', icon: <PersonIcon />, future: true },
 ];
 
 const CONTENT_NAV: NavEntry[] = [
