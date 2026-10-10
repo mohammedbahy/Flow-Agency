@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { calculateDeadline } from "../backend/utils/deadline.js";
-import { DIRECTIONS, OFFSET_UNITS } from "../backend/constants/deadline.js";
+import { calculateDeadline } from "../utils/deadline.js";
+import { DIRECTIONS, OFFSET_UNITS } from "../constants/deadline.js";
 
 const makeRule = (overrides = {}) => ({
   taskType: "design",

@@ -10,29 +10,41 @@ import DeadlineRule from "../models/deadline-rule.js";
 import { ROLES } from "../constants/roles.js";
 import { COMPLETED_STATUS, TASK_STATUS } from "../constants/task-status.js";
 import { getCompletionRate, getDelayedTasks } from "../services/report-service.js";
-import { calculateDeadline } from "../utils/deadline.js";
 import { DIRECTIONS, OFFSET_UNITS } from "../constants/deadline.js";
 
 const BCRYPT_ROUNDS = 10;
 
+process.env.JWT_SECRET ||= "test-secret-key";
+process.env.JWT_EXPIRES_IN ||= "1h";
+
 let mongoServer;
+let server;
+let baseUrl;
 
-const buildApp = (app) => {
-  const server = app.listen(0);
-  const port = server.address().port;
-  const baseUrl = `http://127.0.0.1:${port}`;
-  return { server, baseUrl, fetch: async (path, init) => globalThis.fetch(`${baseUrl}${path}`, init) };
+const request = async (method, path, { token, body } = {}) => {
+  const headers = {};
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(`${baseUrl}${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json() };
 };
 
-const apiRequest = (app, token) => async (path, init = {}) => {
-  const headers = { "Content-Type": "application/json", ...(init.headers || {}) };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(path, { ...init, headers });
-  const data = await res.json();
-  return { res, data };
-};
-
-const createUser = async ({ name, email, role, password = "Pass12345@", status = "active", mustChangePassword = false, createdBy = null }) => {
+const createUser = async ({
+  name,
+  email,
+  role,
+  password = "Pass12345@",
+  status = "active",
+  mustChangePassword = false,
+}) => {
   const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   return User.create({
     name,
@@ -41,24 +53,31 @@ const createUser = async ({ name, email, role, password = "Pass12345@", status =
     role,
     status,
     mustChangePassword,
-    createdBy,
   });
 };
 
-const login = async (app, email, password) => {
-  const { res, data } = await apiRequest(app)(`/api/v1/auth/login`, {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
+const login = async (email, password) => {
+  const { status, body } = await request("POST", "/api/v1/auth/login", {
+    body: { email, password },
   });
-  return { res, data, token: data.data?.token };
+  assert.equal(status, 200);
+  return body.data.token;
 };
 
 before(async () => {
   mongoServer = await MongoMemoryServer.create();
   await mongoose.connect(mongoServer.getUri(), { dbName: "flow-agency-int" });
+  const app = createApp();
+  server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
 after(async () => {
+  if (server) {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
   if (mongoose.connection.readyState !== 0) {
     await mongoose.connection.close();
   }
@@ -67,161 +86,183 @@ after(async () => {
   }
 });
 
-test("admin creates user, lists with search; employee forbidden", async () => {
+test("admin creates user; employee forbidden; list search works", async () => {
   await mongoose.connection.db.dropDatabase();
-  const app = createApp();
-  const { server, fetch } = buildApp(app);
 
-  const admin = await createUser({ name: "Admin", email: "admin@example.com", role: ROLES.ADMIN, password: "Admin12345@" });
-  const adminToken = (await login(app, "admin@example.com", "Admin12345@")).token;
-  const employee = await createUser({ name: "Emp", email: "emp@example.com", role: ROLES.EMPLOYEE, password: "Emp12345@" });
-  const empToken = (await login(app, "emp@example.com", "Emp12345@")).token;
-
-  // Admin creates account manager
-  let res = await fetch("/api/v1/users", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
-    body: JSON.stringify({ name: "AM", email: "am@example.com", role: ROLES.ACCOUNT_MANAGER, password: "Am12345@" }),
+  await createUser({
+    name: "Admin",
+    email: "admin@example.com",
+    role: ROLES.ADMIN,
+    password: "Admin12345@",
   });
-  let data = await res.json();
-  assert.equal(res.status, 201);
-  assert.equal(data.success, true);
-  assert.equal(data.data.mustChangePassword, true);
-  assert.equal(data.data.role, ROLES.ACCOUNT_MANAGER);
-
-  // Employee cannot create user
-  res = await fetch("/api/v1/users", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${empToken}` },
-    body: JSON.stringify({ name: "X", email: "x@example.com", role: ROLES.EMPLOYEE, password: "Xx12345@" }),
+  await createUser({
+    name: "Emp",
+    email: "emp@example.com",
+    role: ROLES.EMPLOYEE,
+    password: "Emp12345@",
   });
-  data = await res.json();
-  assert.equal(res.status, 403);
 
-  // Admin lists with search
-  res = await fetch("/api/v1/users?search=am", {
-    headers: { Authorization: `Bearer ${adminToken}` },
+  const adminToken = await login("admin@example.com", "Admin12345@");
+  const empToken = await login("emp@example.com", "Emp12345@");
+
+  const created = await request("POST", "/api/v1/users", {
+    token: adminToken,
+    body: {
+      name: "AM",
+      email: "am@example.com",
+      role: ROLES.ACCOUNT_MANAGER,
+      password: "Am12345@",
+    },
   });
-  data = await res.json();
-  assert.equal(res.status, 200);
-  assert.equal(data.pagination.total, 1);
+  assert.equal(created.status, 201);
+  assert.equal(created.body.data.mustChangePassword, true);
+  assert.equal(created.body.data.role, ROLES.ACCOUNT_MANAGER);
 
-  await server.close();
+  const forbidden = await request("POST", "/api/v1/users", {
+    token: empToken,
+    body: {
+      name: "X",
+      email: "x@example.com",
+      role: ROLES.EMPLOYEE,
+      password: "Xx12345@",
+    },
+  });
+  assert.equal(forbidden.status, 403);
+
+  const list = await request("GET", "/api/v1/users?search=emp", {
+    token: adminToken,
+  });
+  assert.equal(list.status, 200);
+  assert.equal(list.body.pagination.total, 1);
+  assert.equal(list.body.data[0].email, "emp@example.com");
 });
 
-test("user role change bumps token version and blocks last admin demotion", async () => {
+test("role change bumps token version; last admin demotion blocked", async () => {
   await mongoose.connection.db.dropDatabase();
-  const app = createApp();
-  const { server } = buildApp(app);
-  const admin = await createUser({ name: "A", email: "a@example.com", role: ROLES.ADMIN, password: "A123456@" });
-  const am = await createUser({ name: "AM", email: "am2@example.com", role: ROLES.ACCOUNT_MANAGER, password: "Am212345@" });
-  const adminToken = (await login(app, "a@example.com", "A123456@")).token;
 
-  // Admin cannot demote the last admin
-  let r = await fetch("/api/v1/users", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
-    body: JSON.stringify({ name: "B", email: "b@example.com", role: ROLES.EMPLOYEE, password: "B123456@" }),
+  const admin = await createUser({
+    name: "Admin One",
+    email: "a@example.com",
+    role: ROLES.ADMIN,
+    password: "A123456@",
   });
-  let d = await r.json();
-
-  // Change am role to employee
-  r = await fetch(`/api/v1/users/${am._id}/role`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
-    body: JSON.stringify({ role: ROLES.EMPLOYEE }),
+  const am = await createUser({
+    name: "AM Two",
+    email: "am2@example.com",
+    role: ROLES.ACCOUNT_MANAGER,
+    password: "Am212345@",
   });
-  d = await r.json();
-  assert.equal(r.status, 200);
+  const adminToken = await login("a@example.com", "A123456@");
 
-  // Try to change last admin
-  r = await fetch(`/api/v1/users/${admin._id}/role`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
-    body: JSON.stringify({ role: ROLES.EMPLOYEE }),
+  const changed = await request("PATCH", `/api/v1/users/${am._id}/role`, {
+    token: adminToken,
+    body: { role: ROLES.EMPLOYEE },
   });
-  d = await r.json();
-  assert.equal(r.status, 409);
+  assert.equal(changed.status, 200);
+  assert.equal(changed.body.data.role, ROLES.EMPLOYEE);
 
-  await server.close();
+  const blocked = await request("PATCH", `/api/v1/users/${admin._id}/role`, {
+    token: adminToken,
+    body: { role: ROLES.EMPLOYEE },
+  });
+  assert.equal(blocked.status, 409);
 });
 
-test("tasks: auto deadline, manual override preserved on publishingDate change", async () => {
+test("task auto-deadline and manual override preserved", async () => {
   await mongoose.connection.db.dropDatabase();
-  const app = createApp();
-  const { server, fetch } = buildApp(app);
 
-  const admin = await createUser({ name: "A", email: "a2@example.com", role: ROLES.ADMIN, password: "A212345@" });
-  const token = (await login(app, "a2@example.com", "A212345@")).token;
+  await createUser({
+    name: "Admin Two",
+    email: "a2@example.com",
+    role: ROLES.ADMIN,
+    password: "A212345@",
+  });
+  const token = await login("a2@example.com", "A212345@");
 
-  // Seed rule: design = publishing - 3 days
-  await new DeadlineRule({
+  await DeadlineRule.create({
     taskType: "design",
     offsetValue: 3,
     offsetUnit: OFFSET_UNITS.DAYS,
     direction: DIRECTIONS.BEFORE,
     active: true,
-  }).save();
-
-  const pub = "2026-10-10T00:00:00.000Z";
-  // Create task with publishing date; auto compute
-  let r = await fetch("/api/v1/tasks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ taskType: "design", publishingDate: pub }),
   });
-  let d = await r.json();
-  assert.equal(r.status, 201);
-  assert.equal(d.data.deadline, "2026-10-07T00:00:00.000Z");
-  assert.equal(d.data.deadlineOverridden, false);
-  const taskId = d.data.id;
 
-  // Manual override
+  const created = await request("POST", "/api/v1/tasks", {
+    token,
+    body: { taskType: "design", publishingDate: "2026-10-10T00:00:00.000Z" },
+  });
+  assert.equal(created.status, 201);
+  assert.equal(created.body.data.deadline, "2026-10-07T00:00:00.000Z");
+  assert.equal(created.body.data.deadlineOverridden, false);
+  const taskId = created.body.data.id;
+
   const manual = "2026-10-05T00:00:00.000Z";
-  r = await fetch(`/api/v1/tasks/${taskId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ deadline: manual }),
+  const overridden = await request("PATCH", `/api/v1/tasks/${taskId}`, {
+    token,
+    body: { deadline: manual },
   });
-  d = await r.json();
-  assert.equal(r.status, 200);
-  assert.equal(d.data.deadline, manual);
-  assert.equal(d.data.deadlineOverridden, true);
+  assert.equal(overridden.status, 200);
+  assert.equal(overridden.body.data.deadline, manual);
+  assert.equal(overridden.body.data.deadlineOverridden, true);
 
-  // Change publishing date; override preserved
-  r = await fetch(`/api/v1/tasks/${taskId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ publishingDate: "2026-10-12T00:00:00.000Z" }),
+  const moved = await request("PATCH", `/api/v1/tasks/${taskId}`, {
+    token,
+    body: { publishingDate: "2026-10-12T00:00:00.000Z" },
   });
-  d = await r.json();
-  assert.equal(r.status, 200);
-  assert.equal(d.data.deadline, manual);
-  assert.equal(d.data.deadlineOverridden, true);
-
-  await server.close();
+  assert.equal(moved.status, 200);
+  assert.equal(moved.body.data.deadline, manual);
+  assert.equal(moved.body.data.deadlineOverridden, true);
 });
 
-test("completion rate and delayed tasks aggregation", async () => {
+test("completion rate and delayed-task aggregations", async () => {
   await mongoose.connection.db.dropDatabase();
-  const now = new Date("2026-10-10T00:00:00.000Z");
-  // Create tasks
+
+  const DAY = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const past = (days) => new Date(now - days * DAY);
+
   await Task.create([
-    { taskType: "design", status: COMPLETED_STATUS, publishingDate: new Date("2026-10-05T00:00:00.000Z"), deadline: new Date("2026-10-03T00:00:00.000Z") },
-    { taskType: "content", status: TASK_STATUS.PENDING, publishingDate: new Date("2026-10-06T00:00:00.000Z"), deadline: new Date("2026-10-09T00:00:00.000Z") },
-    { taskType: "seo", status: TASK_STATUS.IN_PROGRESS, publishingDate: new Date("2026-10-07T00:00:00.000Z"), deadline: new Date("2026-10-08T00:00:00.000Z") },
+    {
+      taskType: "design",
+      status: COMPLETED_STATUS,
+      publishingDate: past(5),
+      deadline: past(7), // completed late -> excluded from delayed
+    },
+    {
+      taskType: "content",
+      status: TASK_STATUS.PENDING,
+      publishingDate: past(4),
+      deadline: past(3),
+    },
+    {
+      taskType: "seo",
+      status: TASK_STATUS.PENDING,
+      publishingDate: past(3),
+      deadline: past(1),
+    },
+    {
+      taskType: "content",
+      status: TASK_STATUS.PENDING,
+      publishingDate: past(2),
+      deadline: null, // no deadline -> excluded
+    },
+    {
+      taskType: "design",
+      status: TASK_STATUS.PENDING,
+      publishingDate: past(2),
+      deadline: past(6),
+    },
   ]);
 
-  // Delayed: 2 tasks (deadline 2026-10-09 < now? 2026-10-09 is before 2026-10-10; PENDING -> delayed. deadline 2026-10-08 < 2026-10-10 and IN_PROGRESS -> delayed. COMPLETED with past deadline -> not delayed.)
-  const delayed = await getDelayedTasks({ page: 1, limit: 10 });
-  assert.equal(delayed.pagination.total, 2);
-  assert.equal(delayed.items[0].daysOverdue, 1); // 10-8=2? 2026-10-10 - 2026-10-08 = 2 days? 2 days difference -> daysOverdue floor 2
-  // 2026-10-10 - 2026-10-09 = 1 day
-  const days = delayed.items.map(i => i.daysOverdue).sort((a,b)=>b-a);
-  assert.ok(days.includes(2));
-
   const rate = await getCompletionRate({});
-  assert.equal(rate.total, 3);
+  assert.equal(rate.total, 5);
   assert.equal(rate.completed, 1);
-  assert.equal(rate.rate, 0.3333);
+  assert.equal(rate.notCompleted, 4);
+  assert.equal(rate.rate, 0.2);
+
+  const delayed = await getDelayedTasks({ page: 1, limit: 10 });
+  assert.equal(delayed.pagination.total, 3);
+  const days = delayed.items.map((item) => item.daysOverdue);
+  // Sorted most-delayed first: 6, 3, 1.
+  assert.deepEqual(days, [6, 3, 1]);
 });
