@@ -13,18 +13,26 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import ShieldIcon from '@mui/icons-material/Shield';
 import StatusChip, { type StatusTone } from '../../../shared/components/StatusChip';
-import { USER_STATUS_LABEL, type MockUser, type UserStatus } from '../types/users.types';
+import {
+  BACKEND_ROLE_LABEL,
+  USER_STATUS_LABEL,
+  type DirectoryUser,
+  type UserStatus,
+} from '../types/users.types';
 
 const STATUS_TONE: Record<UserStatus, StatusTone> = {
   active: 'success',
-  invited: 'info',
-  suspended: 'default',
+  inactive: 'default',
+};
+
+const ROLE_TONE: Record<DirectoryUser['role'], StatusTone> = {
+  admin: 'primary',
+  account_manager: 'info',
+  employee: 'default',
 };
 
 function initialsOf(name: string): string {
@@ -36,24 +44,28 @@ function initialsOf(name: string): string {
 }
 
 interface MembersTableProps {
-  users: MockUser[];
+  users: DirectoryUser[];
   selected: string[];
+  canEdit: boolean;
+  canChangeStatus: boolean;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
-  onEdit: (user: MockUser) => void;
-  onToggleStatus: (user: MockUser) => void;
+  onEdit: (user: DirectoryUser) => void;
+  onToggleStatus: (user: DirectoryUser) => void;
 }
 
-/** Team-members table: select, user details, role, clients, 2FA, activity, status, actions. */
+/** Team-members table: live API rows with team chips, role/status, row actions. */
 export function MembersTable({
   users,
   selected,
+  canEdit,
+  canChangeStatus,
   onToggleSelect,
   onToggleSelectAll,
   onEdit,
   onToggleStatus,
 }: MembersTableProps) {
-  const [menuUser, setMenuUser] = useState<MockUser | null>(null);
+  const [menuUser, setMenuUser] = useState<DirectoryUser | null>(null);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
 
   if (users.length === 0) {
@@ -82,9 +94,8 @@ export function MembersTable({
               </TableCell>
               <TableCell>User Details</TableCell>
               <TableCell>Role</TableCell>
-              <TableCell>Assigned Clients & Teams</TableCell>
-              <TableCell>Security</TableCell>
-              <TableCell>Last Active</TableCell>
+              <TableCell>Teams</TableCell>
+              <TableCell>Joined</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -109,31 +120,29 @@ export function MembersTable({
                       <Typography variant="caption" color="text.secondary" noWrap>
                         {user.email}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block" noWrap>
-                        {user.team}
-                      </Typography>
                     </Box>
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <StatusChip label={user.role} tone="info" />
+                  <StatusChip label={BACKEND_ROLE_LABEL[user.role]} tone={ROLE_TONE[user.role]} />
                 </TableCell>
                 <TableCell>
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', minWidth: 140 }}>
-                    {user.clients.slice(0, 2).map((client) => (
-                      <Chip key={client} label={client} size="small" variant="outlined" />
-                    ))}
-                    {user.clients.length > 2 ? <Chip label={`+${user.clients.length - 2}`} size="small" /> : null}
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', minWidth: 120 }}>
+                    {user.teams.length === 0 ? (
+                      <Typography variant="caption" color="text.secondary">
+                        No team yet
+                      </Typography>
+                    ) : (
+                      user.teams.slice(0, 2).map((team) => (
+                        <Chip key={team} label={team} size="small" variant="outlined" />
+                      ))
+                    )}
+                    {user.teams.length > 2 ? <Chip label={`+${user.teams.length - 2}`} size="small" /> : null}
                   </Box>
                 </TableCell>
                 <TableCell>
-                  <Tooltip title={user.twoFactor ? 'Two-factor authentication enforced' : 'Two-factor authentication off'}>
-                    <ShieldIcon color={user.twoFactor ? 'success' : 'disabled'} aria-label={user.twoFactor ? `2FA enforced for ${user.name}` : `2FA off for ${user.name}`} />
-                  </Tooltip>
-                </TableCell>
-                <TableCell>
                   <Typography variant="body2" noWrap>
-                    {user.lastActive}
+                    {user.joinedAt}
                   </Typography>
                 </TableCell>
                 <TableCell>
@@ -144,6 +153,7 @@ export function MembersTable({
                     size="small"
                     aria-label={`Actions for ${user.name}`}
                     aria-haspopup="menu"
+                    disabled={!canEdit && !canChangeStatus}
                     onClick={(e) => {
                       setMenuUser(user);
                       setAnchor(e.currentTarget);
@@ -158,22 +168,26 @@ export function MembersTable({
         </Table>
       </TableContainer>
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
-        <MenuItem
-          onClick={() => {
-            if (menuUser) onEdit(menuUser);
-            setAnchor(null);
-          }}
-        >
-          Edit user
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            if (menuUser) onToggleStatus(menuUser);
-            setAnchor(null);
-          }}
-        >
-          {menuUser?.status === 'active' ? 'Suspend' : 'Activate'}
-        </MenuItem>
+        {canEdit ? (
+          <MenuItem
+            onClick={() => {
+              if (menuUser) onEdit(menuUser);
+              setAnchor(null);
+            }}
+          >
+            Edit user
+          </MenuItem>
+        ) : null}
+        {canChangeStatus ? (
+          <MenuItem
+            onClick={() => {
+              if (menuUser) onToggleStatus(menuUser);
+              setAnchor(null);
+            }}
+          >
+            {menuUser?.status === 'active' ? 'Deactivate' : 'Activate'}
+          </MenuItem>
+        ) : null}
       </Menu>
     </>
   );

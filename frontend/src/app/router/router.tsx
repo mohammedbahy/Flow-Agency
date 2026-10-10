@@ -1,8 +1,10 @@
+import type { ReactNode } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import AppLayout from '../../shared/layouts/AppLayout';
 import DashboardLayout from '../../shared/layouts/DashboardLayout';
 import HomePage from '../../shared/layouts/HomePage';
 import NotFoundPage from '../../shared/layouts/NotFoundPage';
+import ProtectedRoute from './ProtectedRoute';
 import { LoginPage, AdminLoginPage } from '../../features/authentication';
 import { DashboardPage } from '../../features/dashboard';
 import { UsersPage, AddUserPage, RolesPage } from '../../features/users';
@@ -19,16 +21,19 @@ import {
   DeadlineRulesPage,
 } from '../../features/settings';
 
+/** App screens require a live session (JWT); /login stays public. */
+function protect(element: ReactNode) {
+  return (
+    <ProtectedRoute>
+      <DashboardLayout>{element}</DashboardLayout>
+    </ProtectedRoute>
+  );
+}
+
 /**
- * Unified route table (UI preview — no auth guards so every screen
- * is directly reviewable via navigation and direct URL entry).
- *
- * Merged from both team tracks (Oct 2026): duplicate screens were unified
- * to a single route each (/clients, /teams, /tasks/delayed,
- * /tasks/completed, /brand-performance).
- *
- * Temporary demo flow (until backend auth lands):
- * the Login screen's Sign In button navigates straight to /dashboard.
+ * Route table (backend-integrated):
+ * - AuthShell provides the session to every route.
+ * - ProtectedRoute bounces signed-out visitors to /login.
  *
  * Exported as data so tests can drive the exact same configuration
  * through a memory router.
@@ -44,158 +49,25 @@ export const appRoutes: RouteObject[] = [
   },
   { path: '/login', element: <LoginPage /> },
   { path: '/admin/login', element: <AdminLoginPage /> },
-  {
-    path: '/dashboard',
-    element: (
-      <DashboardLayout>
-        <DashboardPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/agency',
-    element: (
-      <DashboardLayout>
-        <DashboardPage initialTab="agency" />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/users',
-    element: (
-      <DashboardLayout>
-        <UsersPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/users/new',
-    element: (
-      <DashboardLayout>
-        <AddUserPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/roles',
-    element: (
-      <DashboardLayout>
-        <RolesPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/teams',
-    element: (
-      <DashboardLayout>
-        <TeamsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/team/assignments',
-    element: (
-      <DashboardLayout>
-        <TeamAssignmentsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/clients',
-    element: (
-      <DashboardLayout>
-        <ClientsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/tasks',
-    element: (
-      <DashboardLayout>
-        <TasksPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/tasks/completion',
-    element: (
-      <DashboardLayout>
-        <CompletionRatePage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/tasks/delayed',
-    element: (
-      <DashboardLayout>
-        <DelayedTasksPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/tasks/completed',
-    element: (
-      <DashboardLayout>
-        <CompletedTasksPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/reviews',
-    element: (
-      <DashboardLayout>
-        <ReviewsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/brand-performance',
-    element: (
-      <DashboardLayout>
-        <BrandPerformancePage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/profile',
-    element: (
-      <DashboardLayout>
-        <ProfilePage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/settings',
-    element: (
-      <DashboardLayout>
-        <SettingsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/settings/agency',
-    element: (
-      <DashboardLayout>
-        <AgencySettingsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/settings/profile',
-    element: (
-      <DashboardLayout>
-        <ProfileSettingsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/settings/deadline-rules',
-    element: (
-      <DashboardLayout>
-        <DeadlineRulesPage />
-      </DashboardLayout>
-    ),
-  },
+  { path: '/dashboard', element: protect(<DashboardPage />) },
+  { path: '/agency', element: protect(<DashboardPage initialTab="agency" />) },
+  { path: '/users', element: protect(<UsersPage />) },
+  { path: '/users/new', element: protect(<AddUserPage />) },
+  { path: '/roles', element: protect(<RolesPage />) },
+  { path: '/teams', element: protect(<TeamsPage />) },
+  { path: '/team/assignments', element: protect(<TeamAssignmentsPage />) },
+  { path: '/clients', element: protect(<ClientsPage />) },
+  { path: '/tasks', element: protect(<TasksPage />) },
+  { path: '/tasks/completion', element: protect(<CompletionRatePage />) },
+  { path: '/tasks/delayed', element: protect(<DelayedTasksPage />) },
+  { path: '/tasks/completed', element: protect(<CompletedTasksPage />) },
+  { path: '/reviews', element: protect(<ReviewsPage />) },
+  { path: '/brand-performance', element: protect(<BrandPerformancePage />) },
+  { path: '/profile', element: protect(<ProfilePage />) },
+  { path: '/settings', element: protect(<SettingsPage />) },
+  { path: '/settings/agency', element: protect(<AgencySettingsPage />) },
+  { path: '/settings/profile', element: protect(<ProfileSettingsPage />) },
+  { path: '/settings/deadline-rules', element: protect(<DeadlineRulesPage />) },
 ];
 
 export const router = createBrowserRouter(appRoutes);

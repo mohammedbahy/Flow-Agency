@@ -1,18 +1,18 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
+  CircularProgress,
   FormControl,
   Grid,
   IconButton,
   InputLabel,
-  LinearProgress,
   MenuItem,
   Select,
-  Slider,
   Table,
   TableBody,
   TableCell,
@@ -25,66 +25,127 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PageContainer from '../../../shared/components/PageContainer';
 import PageHeader from '../../../shared/components/PageHeader';
 import ConfirmDialog, { useConfirmDialog } from '../../../shared/components/ConfirmDialog';
-import { MOCK_USERS } from '../../users/mock/users.mock';
-import { USER_ROLES } from '../../users/types/users.types';
-import { MOCK_ASSIGNMENTS, MOCK_PROJECTS_FOR_ASSIGNMENT } from '../mock/teams.mock';
-import type { Assignment } from '../types/teams.types';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { getApiErrorMessage } from '../../../core/api/errors';
+import { teamsService } from '../services/teams.service';
+import { usersService } from '../../users/services/users.service';
 
-/** Team Assignment screen: assign members to projects with allocation. All local mock state. */
+interface TeamOption {
+  id: string;
+  name: string;
+}
+
+interface MemberRow {
+  userId: string;
+  name: string;
+  email: string;
+}
+
+interface AssignmentView {
+  teamId: string;
+  teamName: string;
+  members: MemberRow[];
+}
+
+function memberInitials(name: string): string {
+  return name.split(' ').map((p) => p[0]).slice(0, 2).join('');
+}
+
+/** Team Assignments screen — staff live users into teams (`/api/v1/teams/:id/members`). */
 export function TeamAssignmentsPage() {
-  const [assignments, setAssignments] = useState<Assignment[]>(MOCK_ASSIGNMENTS);
-  const [projectId, setProjectId] = useState('');
-  const [memberName, setMemberName] = useState('');
-  const [role, setRole] = useState<string>(USER_ROLES[3]);
-  const [allocation, setAllocation] = useState(50);
+  const { can } = useAuth();
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentView[]>([]);
+  const [userOptions, setUserOptions] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [teamId, setTeamId] = useState('');
+  const [userId, setUserId] = useState('');
+  const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-  const [pendingRemoval, setPendingRemoval] = useState<Assignment | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<{ teamId: string; teamName: string; member: MemberRow } | null>(null);
   const removeDialog = useConfirmDialog();
 
-  const activeMembers = MOCK_USERS.filter((u) => u.status === 'active');
+  const canManage = can('teams:manage_members');
 
-  function handleAssign() {
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [{ data }, usersRes] = await Promise.all([
+        teamsService.list({ limit: 100 }),
+        usersService.list({ limit: 100 }),
+      ]);
+      const detailed = await Promise.all(data.map((t) => teamsService.get(t.id)));
+      const nameById = new Map(usersRes.data.map((u) => [u.id, { name: u.name, email: u.email }]));
+      setTeams(detailed.map((t) => ({ id: t.id, name: t.name })));
+      setAssignments(
+        detailed.map((t) => ({
+          teamId: t.id,
+          teamName: t.name,
+          members: (t.members ?? []).map((m) => ({
+            userId: m.id,
+            name: m.name || nameById.get(m.id)?.name || 'Unknown member',
+            email: m.email || nameById.get(m.id)?.email || '',
+          })),
+        })),
+      );
+      setUserOptions(
+        usersRes.data.filter((u) => u.status === 'active').map((u) => ({ id: u.id, name: `${u.name} · ${u.role}` })),
+      );
+    } catch (err) {
+      setLoadError(getApiErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleAssign() {
     setError(null);
-    if (!projectId) {
-      setError('Select a project to assign the member to.');
+    if (!teamId) {
+      setError('Select a team to staff the member into.');
       return;
     }
-    if (!memberName) {
+    if (!userId) {
       setError('Select a team member to assign.');
       return;
     }
-    if (assignments.some((a) => a.project === projectName(projectId) && a.memberName === memberName)) {
-      setError(`${memberName} is already assigned to this project.`);
+    const view = assignments.find((a) => a.teamId === teamId);
+    if (view?.members.some((m) => m.userId === userId)) {
+      setError('This member is already assigned to the selected team.');
       return;
     }
-    const project = MOCK_PROJECTS_FOR_ASSIGNMENT.find((p) => p.id === projectId);
-    if (!project) return;
-    const created: Assignment = {
-      id: `local-${Date.now()}`,
-      project: project.name,
-      client: project.client,
-      memberName,
-      role,
-      allocation,
-    };
-    setAssignments((prev) => [created, ...prev]);
-    setFlash(`${memberName} assigned to ${project.name} at ${allocation}% (local preview — not saved).`);
-    setProjectId('');
-    setMemberName('');
-    setAllocation(50);
+    setAssigning(true);
+    try {
+      await teamsService.addMembers(teamId, [userId]);
+      setFlash('Member assigned successfully.');
+      setTeamId('');
+      setUserId('');
+      await load();
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setAssigning(false);
+    }
   }
 
-  function projectName(id: string): string {
-    return MOCK_PROJECTS_FOR_ASSIGNMENT.find((p) => p.id === id)?.name ?? '';
-  }
-
-  function handleRemove() {
+  async function handleRemove() {
     if (!pendingRemoval) return;
-    setAssignments((prev) => prev.filter((a) => a.id !== pendingRemoval.id));
-    setFlash(`${pendingRemoval.memberName} removed from ${pendingRemoval.project} (local preview — not saved).`);
-    setPendingRemoval(null);
-    removeDialog.hide();
+    try {
+      await teamsService.removeMember(pendingRemoval.teamId, pendingRemoval.member.userId);
+      setFlash(`${pendingRemoval.member.name} removed from ${pendingRemoval.teamName}.`);
+      await load();
+    } catch (err) {
+      setFlash(getApiErrorMessage(err));
+    } finally {
+      setPendingRemoval(null);
+      removeDialog.hide();
+    }
   }
 
   return (
@@ -92,7 +153,7 @@ export function TeamAssignmentsPage() {
       <PageHeader
         eyebrow="Workspace • Staffing"
         title="Team Assignments"
-        subtitle="Assign active team members to projects with an allocation. Changes are local preview state."
+        subtitle="Assign active users into teams. Changes persist to the backend immediately."
       />
 
       {flash ? (
@@ -106,122 +167,130 @@ export function TeamAssignmentsPage() {
         </Alert>
       ) : null}
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <Card>
-            <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography variant="h6" component="h3">
-                New assignment
-              </Typography>
-              <FormControl fullWidth>
-                <InputLabel id="assign-project-label">Project</InputLabel>
-                <Select labelId="assign-project-label" id="assign-project" label="Project" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                  {MOCK_PROJECTS_FOR_ASSIGNMENT.map((p) => (
-                    <MenuItem key={p.id} value={p.id}>
-                      {p.name} · {p.client}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel id="assign-member-label">Team member</InputLabel>
-                <Select labelId="assign-member-label" id="assign-member" label="Team member" value={memberName} onChange={(e) => setMemberName(e.target.value)}>
-                  {activeMembers.map((m) => (
-                    <MenuItem key={m.id} value={m.name}>
-                      {m.name} · {m.role}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel id="assign-role-label">Assignment role</InputLabel>
-                <Select labelId="assign-role-label" id="assign-role" label="Assignment role" value={role} onChange={(e) => setRole(e.target.value)}>
-                  {USER_ROLES.map((r) => (
-                    <MenuItem key={r} value={r}>
-                      {r}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Box>
-                <Typography variant="body2" fontWeight={600} gutterBottom component="label" htmlFor="assign-allocation">
-                  Allocation: {allocation}%
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }} role="status" aria-label="Loading assignments">
+          <CircularProgress />
+        </Box>
+      ) : loadError ? (
+        <Alert severity="error" role="alert" action={<Button color="inherit" size="small" onClick={() => void load()}>Retry</Button>}>
+          {loadError}
+        </Alert>
+      ) : (
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, lg: 4 }}>
+            <Card>
+              <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Typography variant="h6" component="h3">
+                  New assignment
                 </Typography>
-                <Slider id="assign-allocation" value={allocation} onChange={(_, v) => setAllocation(v as number)} step={5} min={5} max={100} aria-label="Allocation percent" />
-              </Box>
-              <Button variant="contained" onClick={handleAssign}>
-                Assign member
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, lg: 8 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" component="h3" gutterBottom>
-                Current assignments ({assignments.length})
-              </Typography>
-              <TableContainer sx={{ overflowX: 'auto' }}>
-                <Table aria-label="Current assignments">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Project</TableCell>
-                      <TableCell>Member</TableCell>
-                      <TableCell>Role</TableCell>
-                      <TableCell>Allocation</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {assignments.map((a) => (
-                      <TableRow key={a.id} hover>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={700}>
-                            {a.project}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {a.client}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{a.memberName}</TableCell>
-                        <TableCell>{a.role}</TableCell>
-                        <TableCell sx={{ minWidth: 140 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <LinearProgress variant="determinate" value={a.allocation} sx={{ flexGrow: 1, height: 8, borderRadius: 4 }} aria-label={`${a.memberName} allocation ${a.allocation} percent`} />
-                            <Typography variant="caption" color="text.secondary">
-                              {a.allocation}%
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="right">
-                          <IconButton
-                            size="small"
-                            aria-label={`Remove ${a.memberName} from ${a.project}`}
-                            onClick={() => {
-                              setPendingRemoval(a);
-                              removeDialog.show();
-                            }}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
+                <FormControl fullWidth>
+                  <InputLabel id="assign-team-label">Team</InputLabel>
+                  <Select labelId="assign-team-label" id="assign-team" label="Team" value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+                    {teams.map((t) => (
+                      <MenuItem key={t.id} value={t.id}>
+                        {t.name}
+                      </MenuItem>
                     ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel id="assign-member-label">Team member</InputLabel>
+                  <Select labelId="assign-member-label" id="assign-member" label="Team member" value={userId} onChange={(e) => setUserId(e.target.value)}>
+                    {userOptions.map((m) => (
+                      <MenuItem key={m.id} value={m.id}>
+                        {m.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Button variant="contained" onClick={() => void handleAssign()} disabled={assigning || !canManage}>
+                  {assigning ? 'Assigning…' : 'Assign member'}
+                </Button>
+                {!canManage ? (
+                  <Typography variant="caption" color="text.secondary">
+                    Your role cannot manage team members.
+                  </Typography>
+                ) : null}
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid size={{ xs: 12, lg: 8 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" component="h3" gutterBottom>
+                  Current assignments
+                </Typography>
+                {assignments.map((view) => (
+                  <Box key={view.teamId} sx={{ mb: 2 }}>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {view.teamName} ({view.members.length})
+                    </Typography>
+                    {view.members.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        No members yet.
+                      </Typography>
+                    ) : (
+                      <TableContainer sx={{ overflowX: 'auto' }}>
+                        <Table aria-label={`Members of ${view.teamName}`}>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Member</TableCell>
+                              {canManage ? <TableCell align="right">Actions</TableCell> : null}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {view.members.map((m) => (
+                              <TableRow key={m.userId} hover>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                                    <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem' }} aria-hidden>
+                                      {memberInitials(m.name)}
+                                    </Avatar>
+                                    <Box>
+                                      <Typography variant="body2" fontWeight={600}>
+                                        {m.name}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {m.email}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                </TableCell>
+                                {canManage ? (
+                                  <TableCell align="right">
+                                    <IconButton
+                                      size="small"
+                                      aria-label={`Remove ${m.name} from ${view.teamName}`}
+                                      onClick={() => {
+                                        setPendingRemoval({ teamId: view.teamId, teamName: view.teamName, member: m });
+                                        removeDialog.show();
+                                      }}
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </TableCell>
+                                ) : null}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+          </Grid>
         </Grid>
-      </Grid>
+      )}
 
       <ConfirmDialog
         open={removeDialog.open}
         title="Remove this assignment?"
-        message={pendingRemoval ? `${pendingRemoval.memberName} will be unassigned from ${pendingRemoval.project} in the local preview.` : ''}
+        message={pendingRemoval ? `${pendingRemoval.member.name} will be removed from ${pendingRemoval.teamName}.` : ''}
         confirmLabel="Remove"
         confirmColor="error"
-        onConfirm={handleRemove}
+        onConfirm={() => void handleRemove()}
         onClose={() => {
           removeDialog.hide();
           setPendingRemoval(null);

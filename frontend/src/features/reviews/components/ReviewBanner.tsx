@@ -23,7 +23,7 @@ export function ReviewBanner({ pendingCount, onApproveAll }: ReviewBannerProps) 
             Action Required: You have {pendingCount} deliverable item{pendingCount === 1 ? '' : 's'} awaiting review
           </Typography>
           <Typography variant="body2" sx={{ color: '#E0E7FF' }}>
-            Decisions below apply to the local preview only — nothing is sent to a backend.
+            Decisions below are recorded in the backend immediately.
           </Typography>
         </Box>
         <Button

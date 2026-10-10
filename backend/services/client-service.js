@@ -36,10 +36,7 @@ const formatClient = (client) => ({
 });
 
 const assertAccountManagerExists = async (userId) => {
-  const exists = await User.exists({
-    _id: userId,
-    role: ROLES.ACCOUNT_MANAGER,
-  });
+  const exists = await User.exists({ _id: userId, role: ROLES.ACCOUNT_MANAGER });
   if (!exists) {
     throw HttpError.badRequest("Validation failed", [
       {
@@ -113,13 +110,10 @@ export const getClientDetail = async (clientId, actor) => {
   }
 
   const isOwnAccountManager =
-    client.accountManager &&
-    String(client.accountManager._id) === String(actor._id);
+    client.accountManager && String(client.accountManager._id) === String(actor._id);
 
   if (actor.role === ROLES.ACCOUNT_MANAGER && !isOwnAccountManager) {
-    throw HttpError.forbidden(
-      "Account managers can only view clients assigned to them",
-    );
+    throw HttpError.forbidden("Account managers can only view clients assigned to them");
   }
 
   const teams = await getTeamAssignmentsForClient(clientId);

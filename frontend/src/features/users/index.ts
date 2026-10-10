@@ -1,17 +1,29 @@
-// Users / Access Control feature barrel (Sprint 1 UI preview).
+// Users / Access Control feature barrel — live backend (`/api/v1/users`).
 export { UsersPage } from './pages/UsersPage';
 export { AddUserPage } from './pages/AddUserPage';
 export { RolesPage } from './pages/RolesPage';
 export { MembersTable } from './components/MembersTable';
 export { UserDialog } from './components/UserDialog';
-export { ClientUsersPanel, RolesPanel, AuditPanel } from './components/DirectoryPanels';
-export { MOCK_USERS, MOCK_CLIENT_USERS, MOCK_ROLES, MOCK_AUDIT } from './mock/users.mock';
-export { validateUserForm, usersToCsv, USER_ROLES, USER_TEAMS, USER_STATUS_LABEL } from './types/users.types';
+export { RolesPanel, type LiveRoleEntry } from './components/DirectoryPanels';
+export { usersService } from './services/users.service';
+export {
+  validateUserForm,
+  validateStrongPassword,
+  usersToCsv,
+  BACKEND_ROLES,
+  CREATABLE_ROLES,
+  BACKEND_ROLE_LABEL,
+  USER_STATUS_LABEL,
+} from './types/users.types';
 export type {
-  MockUser,
-  ClientUser,
-  RoleEntry,
-  AuditEntry,
+  ApiUser,
+  BackendRole,
+  BackendUserStatus,
+  ListUsersQuery,
+  CreateUserBody,
+} from './services/users.service';
+export type {
+  DirectoryUser,
   UsersTab,
   UserStatus,
   UserFormValues,

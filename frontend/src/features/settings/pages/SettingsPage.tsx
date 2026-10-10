@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Card, CardContent, FormControl, InputLabel,
   MenuItem, Select, Switch, Tab, Tabs, TextField, Typography,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ScheduleIcon from '@mui/icons-material/Schedule';
+import { Link as RouterLink } from 'react-router-dom';
 import PageContainer from '../../../shared/components/PageContainer';
-import { MOCK_DEADLINE_RULES } from '../../deadlines/mock/deadlines.mock';
-
+import { getApiErrorMessage } from '../../../core/api/errors';
+import { deadlineRulesService, type ApiDeadlineRule } from '../services/deadline-rules.service';
+import { TASK_TYPE_LABEL } from '../types/settings.types';
 type SettingsTab = 'general' | 'notifications' | 'security' | 'deadlines';
 
-/** Settings screen: workspace preferences with tabs — all local mock state. */
+/** Settings screen: workspace preferences (local) + live deadline defaults. */
 export function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>('general');
   const [workspaceName, setWorkspaceName] = useState('Neurteq Agency');
@@ -19,13 +21,33 @@ export function SettingsPage() {
   const [slackNotif, setSlackNotif] = useState(false);
   const [weeklyReport, setWeeklyReport] = useState(true);
   const [twoFactorRequired, setTwoFactorRequired] = useState(true);
-  const [deadlineEnabled, setDeadlineEnabled] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(MOCK_DEADLINE_RULES.map((r) => [r.id, r.enabled])),
-  );
+  const [rules, setRules] = useState<ApiDeadlineRule[]>([]);
   const [flash, setFlash] = useState<string | null>(null);
 
+  // Live deadline rules back the Deadlines tab (persisted toggles).
+  useEffect(() => {
+    if (tab !== 'deadlines') return;
+    let cancelled = false;
+    deadlineRulesService
+      .list()
+      .then((data) => !cancelled && setRules(data))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [tab]);
+
+  async function handleToggleRule(rule: ApiDeadlineRule, active: boolean) {
+    try {
+      await deadlineRulesService.update(rule.id, { active });
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, active } : r)));
+    } catch (error) {
+      setFlash(getApiErrorMessage(error));
+    }
+  }
+
   function handleSave() {
-    setFlash('Settings saved (local preview — not saved).');
+    setFlash('Workspace preferences are kept on this device only — deadline changes save to the backend immediately.');
   }
 
   return (
@@ -113,22 +135,28 @@ export function SettingsPage() {
           {tab === 'deadlines' ? (
             <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
               <Typography variant="body2" color="text.secondary">
-                Deadline automation defaults. Full rule builder lives on the Deadline Rules page.
+                Deadline automation defaults (persisted). Full rule builder lives on the{' '}
+                <RouterLink to="/settings/deadline-rules">Deadline Rules page</RouterLink>.
               </Typography>
-              {MOCK_DEADLINE_RULES.map((rule) => (
+              {rules.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No deadline rules yet.
+                </Typography>
+              ) : null}
+              {rules.map((rule) => (
                 <Card key={rule.id} variant="outlined">
                   <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
                       <ScheduleIcon color="action" sx={{ mt: 0.5 }} />
                       <Box>
-                        <Typography variant="body1" fontWeight={700}>{rule.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">{rule.threshold} • {rule.action}</Typography>
+                        <Typography variant="body1" fontWeight={700}>{TASK_TYPE_LABEL[rule.taskType] ?? rule.taskType}</Typography>
+                        <Typography variant="body2" color="text.secondary">{rule.offsetValue} {rule.offsetUnit} {rule.direction}</Typography>
                       </Box>
                     </Box>
                     <Switch
-                      checked={deadlineEnabled[rule.id] ?? rule.enabled}
-                      onChange={(e) => setDeadlineEnabled((prev) => ({ ...prev, [rule.id]: e.target.checked }))}
-                      inputProps={{ 'aria-label': `${rule.name} enabled` }}
+                      checked={rule.active}
+                      onChange={(e) => void handleToggleRule(rule, e.target.checked)}
+                      inputProps={{ 'aria-label': `${rule.taskType} rule enabled` }}
                     />
                   </CardContent>
                 </Card>

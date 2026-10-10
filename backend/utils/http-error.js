@@ -16,9 +16,7 @@ class HttpError extends Error {
     return new HttpError(401, message);
   }
 
-  static forbidden(
-    message = "You do not have permission to perform this action",
-  ) {
+  static forbidden(message = "You do not have permission to perform this action") {
     return new HttpError(403, message);
   }
 

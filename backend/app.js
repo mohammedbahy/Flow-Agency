@@ -1,10 +1,14 @@
 import express from "express";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import agencySettingsRoutes from "./routes/agency-settings-routes.js";
 import authRoutes from "./routes/auth-routes.js";
+import brandRoutes from "./routes/brand-routes.js";
 import clientRoutes from "./routes/client-routes.js";
+import dashboardRoutes from "./routes/dashboard-routes.js";
 import deadlineRuleRoutes from "./routes/deadline-rule-routes.js";
 import permissionRoutes from "./routes/permission-routes.js";
 import reportRoutes from "./routes/report-routes.js";
+import reviewRoutes from "./routes/review-routes.js";
 import taskRoutes from "./routes/task-routes.js";
 import teamRoutes from "./routes/team-routes.js";
 import userRoutes from "./routes/user-routes.js";
@@ -41,6 +45,10 @@ export const createApp = ({ identityMiddleware } = {}) => {
   app.use("/api/v1/deadline-rules", deadlineRuleRoutes);
   app.use("/api/v1/tasks", taskRoutes);
   app.use("/api/v1/reports", reportRoutes);
+  app.use("/api/v1/reviews", reviewRoutes);
+  app.use("/api/v1/brands", brandRoutes);
+  app.use("/api/v1/dashboard", dashboardRoutes);
+  app.use("/api/v1/agency-settings", agencySettingsRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

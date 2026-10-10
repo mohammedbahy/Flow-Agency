@@ -1,64 +1,57 @@
+import mongoose from "mongoose";
 import HttpError from "../utils/http-error.js";
 
-/** Terminal middleware: turns any unmatched route into a 404 HttpError. */
-export const notFoundHandler = (req, res, next) => {
-  next(HttpError.notFound("Route not found"));
+export const notFoundHandler = (req, res) => {
+  res.status(404).json({ success: false, message: "Route not found" });
 };
 
-/** Maps common Mongoose failures onto HttpErrors. */
-const normalizeError = (error) => {
-  if (error instanceof HttpError) {
-    return error;
+export const errorHandler = (err, req, res, next) => {
+  if (res.headersSent) {
+    next(err);
+    return;
   }
 
-  if (error?.type === "entity.parse.failed") {
-    return HttpError.badRequest("Invalid JSON payload");
-  }
-
-  // Honor client errors raised by middleware (e.g. body-parser) instead of
-  // masking them as 500.
-  const status = error?.statusCode ?? error?.status;
-  if (typeof status === "number" && status >= 400 && status < 500) {
-    return new HttpError(status, error.message || "Request error");
-  }
-
-  if (error?.name === "ValidationError") {
-    const errors = Object.values(error.errors ?? {}).map((entry) => ({
-      field: entry.path,
-      message: entry.message,
-    }));
-    return HttpError.badRequest("Validation failed", errors);
-  }
-
-  if (error?.name === "CastError") {
-    return HttpError.badRequest(`Invalid ${error.path}`);
-  }
-
-  if (error?.code === 11000) {
-    return HttpError.conflict("Resource already exists");
-  }
-
-  return error;
-};
-
-// eslint-disable-next-line no-unused-vars -- Express requires the 4-arg signature
-export const errorHandler = (error, req, res, next) => {
-  const normalized = normalizeError(error);
-
-  if (normalized instanceof HttpError) {
-    const body = {
+  if (err instanceof HttpError) {
+    res.status(err.statusCode).json({
       success: false,
-      message: normalized.message,
-    };
-    if (normalized.errors) {
-      body.errors = normalized.errors;
-    }
-    return res.status(normalized.statusCode).json(body);
+      message: err.message,
+      ...(err.errors ? { errors: err.errors } : {}),
+    });
+    return;
   }
 
-  console.error("Unhandled error:", normalized);
-  return res.status(500).json({
-    success: false,
-    message: "Internal server error",
-  });
+  if (err.type === "entity.parse.failed") {
+    res.status(400).json({ success: false, message: "Invalid JSON payload" });
+    return;
+  }
+
+  if (err.type === "entity.too.large") {
+    res.status(413).json({ success: false, message: "Payload too large" });
+    return;
+  }
+
+  if (err instanceof mongoose.Error.ValidationError) {
+    res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: Object.values(err.errors).map((error) => ({
+        field: error.path,
+        message: error.message,
+      })),
+    });
+    return;
+  }
+
+  if (err instanceof mongoose.Error.CastError) {
+    res.status(400).json({ success: false, message: `Invalid ${err.path}` });
+    return;
+  }
+
+  if (err.code === 11000) {
+    res.status(409).json({ success: false, message: "Resource already exists" });
+    return;
+  }
+
+  console.error("Unhandled error:", err);
+  res.status(500).json({ success: false, message: "Internal server error" });
 };

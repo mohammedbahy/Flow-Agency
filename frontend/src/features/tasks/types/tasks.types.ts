@@ -1,5 +1,4 @@
 export type TaskStatus = 'completed' | 'delayed' | 'in-progress';
-export type TaskPriority = 'high' | 'medium' | 'low';
 
 export interface MockTaskRow {
   id: string;
@@ -11,21 +10,18 @@ export interface MockTaskRow {
   completion: number;
 }
 
-export interface MockTask {
+/** Backend task type catalogue (`constants/task-types.js`). */
+export const BACKEND_TASK_TYPES = ['design', 'content', 'development', 'video', 'seo', 'other'] as const;
+
+/** Live task row for tables (names resolved from directory data). */
+export interface TaskRow {
   id: string;
   title: string;
+  taskType: string;
   client: string;
-  project: string;
   assignee: string;
   dueDate: string;
   completedDate?: string;
   daysOverdue?: number;
-  priority: TaskPriority;
   status: 'delayed' | 'completed';
 }
-
-export const TASK_PRIORITY_LABEL: Record<TaskPriority, string> = {
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-};

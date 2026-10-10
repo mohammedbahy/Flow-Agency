@@ -45,10 +45,7 @@ export const assignTeamToClient = async (clientId, teamId, actor) => {
     throw HttpError.notFound("Team not found");
   }
 
-  const alreadyAssigned = await TeamAssignment.exists({
-    client: clientId,
-    team: teamId,
-  });
+  const alreadyAssigned = await TeamAssignment.exists({ client: clientId, team: teamId });
   if (alreadyAssigned) {
     throw HttpError.conflict("Team is already assigned to this client");
   }
@@ -92,10 +89,7 @@ export const removeTeamAssignment = async (clientId, teamId) => {
   assertValidObjectId(teamId, "team id");
   await assertClientExists(clientId);
 
-  const assignment = await TeamAssignment.findOneAndDelete({
-    client: clientId,
-    team: teamId,
-  });
+  const assignment = await TeamAssignment.findOneAndDelete({ client: clientId, team: teamId });
   if (!assignment) {
     throw HttpError.notFound("Team is not assigned to this client");
   }

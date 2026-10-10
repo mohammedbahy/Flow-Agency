@@ -14,10 +14,11 @@ import {
   Switch,
   TextField,
 } from '@mui/material';
+import type { ApiDeadlineRule } from '../services/deadline-rules.service';
 import {
-  DEADLINE_APPLIES_LABEL,
+  DIRECTION_LABEL,
+  TASK_TYPE_LABEL,
   validateDeadlineRule,
-  type DeadlineRule,
   type DeadlineRuleErrors,
   type DeadlineRuleForm,
 } from '../types/settings.types';
@@ -25,64 +26,52 @@ import {
 interface RuleDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
-  initial?: DeadlineRule | null;
+  initial?: ApiDeadlineRule | null;
   onClose: () => void;
   onSubmit: (values: DeadlineRuleForm) => void;
+  submitting?: boolean;
 }
 
-/** Shared deadline-rule create/edit dialog with validation (local state only). */
-export function RuleDialog({ open, mode, initial, onClose, onSubmit }: RuleDialogProps) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [appliesTo, setAppliesTo] = useState<DeadlineRuleForm['appliesTo']>(initial?.appliesTo ?? 'reviews');
-  const [limit, setLimit] = useState(initial ? String(initial.limit) : '');
-  const [unit, setUnit] = useState<DeadlineRuleForm['unit']>(initial?.unit ?? 'hours');
-  const [action, setAction] = useState(initial?.action ?? '');
-  const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+/** Deadline-rule create/edit dialog — fields mirror `POST /api/v1/deadline-rules`. */
+export function RuleDialog({ open, mode, initial, onClose, onSubmit, submitting = false }: RuleDialogProps) {
+  const [taskType, setTaskType] = useState<DeadlineRuleForm['taskType']>(initial?.taskType ?? 'design');
+  const [offsetValue, setOffsetValue] = useState(initial ? String(initial.offsetValue) : '');
+  const [offsetUnit, setOffsetUnit] = useState<DeadlineRuleForm['offsetUnit']>(initial?.offsetUnit ?? 'hours');
+  const [direction, setDirection] = useState<DeadlineRuleForm['direction']>(initial?.direction ?? 'before');
+  const [active, setActive] = useState(initial?.active ?? true);
   const [errors, setErrors] = useState<DeadlineRuleErrors>({});
 
   const dialogKey = initial?.id ?? mode;
   const [lastKey, setLastKey] = useState(dialogKey);
   if (lastKey !== dialogKey) {
     setLastKey(dialogKey);
-    setName(initial?.name ?? '');
-    setAppliesTo(initial?.appliesTo ?? 'reviews');
-    setLimit(initial ? String(initial.limit) : '');
-    setUnit(initial?.unit ?? 'hours');
-    setAction(initial?.action ?? '');
-    setEnabled(initial?.enabled ?? true);
+    setTaskType(initial?.taskType ?? 'design');
+    setOffsetValue(initial ? String(initial.offsetValue) : '');
+    setOffsetUnit(initial?.offsetUnit ?? 'hours');
+    setDirection(initial?.direction ?? 'before');
+    setActive(initial?.active ?? true);
     setErrors({});
   }
 
   function handleSubmit() {
-    const nextErrors = validateDeadlineRule({ name, appliesTo, limit, unit, action, enabled });
+    const nextErrors = validateDeadlineRule({ taskType, offsetValue, offsetUnit, direction, active });
     setErrors(nextErrors);
-    if (nextErrors.name ?? nextErrors.limit) return;
-    onSubmit({ name: name.trim(), appliesTo, limit, unit, action: action.trim(), enabled });
+    if (nextErrors.offsetValue) return;
+    onSubmit({ taskType, offsetValue, offsetUnit, direction, active });
   }
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{mode === 'create' ? 'Add deadline rule' : 'Edit deadline rule'}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-        <TextField
-          id="rule-name"
-          label="Rule name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          error={Boolean(errors.name)}
-          helperText={errors.name ?? ' '}
-          fullWidth
-          required
-          sx={{ mt: 0.5 }}
-        />
-        <Grid container spacing={2}>
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
           <Grid size={{ xs: 12, sm: 6 }}>
             <FormControl fullWidth>
-              <InputLabel id="rule-applies-label">Applies to</InputLabel>
-              <Select labelId="rule-applies-label" id="rule-applies" label="Applies to" value={appliesTo} onChange={(e) => setAppliesTo(e.target.value as DeadlineRuleForm['appliesTo'])}>
-                {(Object.keys(DEADLINE_APPLIES_LABEL) as DeadlineRuleForm['appliesTo'][]).map((key) => (
+              <InputLabel id="rule-task-type-label">Task type</InputLabel>
+              <Select labelId="rule-task-type-label" id="rule-task-type" label="Task type" value={taskType} onChange={(e) => setTaskType(e.target.value as DeadlineRuleForm['taskType'])}>
+                {(Object.keys(TASK_TYPE_LABEL) as DeadlineRuleForm['taskType'][]).map((key) => (
                   <MenuItem key={key} value={key}>
-                    {DEADLINE_APPLIES_LABEL[key]}
+                    {TASK_TYPE_LABEL[key]}
                   </MenuItem>
                 ))}
               </Select>
@@ -90,13 +79,13 @@ export function RuleDialog({ open, mode, initial, onClose, onSubmit }: RuleDialo
           </Grid>
           <Grid size={{ xs: 6, sm: 3 }}>
             <TextField
-              id="rule-limit"
-              label="Limit"
+              id="rule-offset"
+              label="Offset"
               inputMode="numeric"
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-              error={Boolean(errors.limit)}
-              helperText={errors.limit ?? ' '}
+              value={offsetValue}
+              onChange={(e) => setOffsetValue(e.target.value)}
+              error={Boolean(errors.offsetValue)}
+              helperText={errors.offsetValue ?? ' '}
               fullWidth
               required
             />
@@ -104,23 +93,22 @@ export function RuleDialog({ open, mode, initial, onClose, onSubmit }: RuleDialo
           <Grid size={{ xs: 6, sm: 3 }}>
             <FormControl fullWidth>
               <InputLabel id="rule-unit-label">Unit</InputLabel>
-              <Select labelId="rule-unit-label" id="rule-unit" label="Unit" value={unit} onChange={(e) => setUnit(e.target.value as DeadlineRuleForm['unit'])}>
+              <Select labelId="rule-unit-label" id="rule-unit" label="Unit" value={offsetUnit} onChange={(e) => setOffsetUnit(e.target.value as DeadlineRuleForm['offsetUnit'])}>
                 <MenuItem value="hours">Hours</MenuItem>
                 <MenuItem value="days">Days</MenuItem>
               </Select>
             </FormControl>
           </Grid>
         </Grid>
-        <TextField
-          id="rule-action"
-          label="Escalation action"
-          placeholder="e.g. Escalate to account lead"
-          value={action}
-          onChange={(e) => setAction(e.target.value)}
-          fullWidth
-        />
+        <FormControl fullWidth>
+          <InputLabel id="rule-direction-label">Direction</InputLabel>
+          <Select labelId="rule-direction-label" id="rule-direction" label="Direction" value={direction} onChange={(e) => setDirection(e.target.value as DeadlineRuleForm['direction'])}>
+            <MenuItem value="before">{DIRECTION_LABEL.before}</MenuItem>
+            <MenuItem value="after">{DIRECTION_LABEL.after}</MenuItem>
+          </Select>
+        </FormControl>
         <FormControlLabel
-          control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} id="rule-enabled" />}
+          control={<Switch checked={active} onChange={(e) => setActive(e.target.checked)} id="rule-enabled" />}
           label="Rule enabled"
         />
       </DialogContent>
@@ -128,7 +116,7 @@ export function RuleDialog({ open, mode, initial, onClose, onSubmit }: RuleDialo
         <Button onClick={onClose} color="inherit">
           Cancel
         </Button>
-        <Button onClick={handleSubmit} variant="contained">
+        <Button onClick={handleSubmit} variant="contained" disabled={submitting}>
           {mode === 'create' ? 'Add rule' : 'Save changes'}
         </Button>
       </DialogActions>

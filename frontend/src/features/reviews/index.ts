@@ -1,13 +1,12 @@
-// Reviews feature barrel (Sprint 1 UI preview).
+// Reviews feature barrel — live backend (`/api/v1/reviews`).
 export { ReviewsPage } from './pages/ReviewsPage';
 export { ReviewBanner } from './components/ReviewBanner';
 export { ReviewItemCard } from './components/ReviewItemCard';
-export { ProjectProgressPanel, RecentlyApprovedPanel, NewReviewsPanel } from './components/ReviewRails';
-export { MOCK_REVIEWS, MOCK_PROJECT_PROGRESS } from './mock/reviews.mock';
-export { REVIEW_STATUS_LABEL, REVIEW_TYPE_LABEL } from './types/reviews.types';
+export { RecentlyApprovedPanel, WorkflowSnapshotPanel } from './components/ReviewRails';
+export { reviewsService } from './services/reviews.service';
 export type {
-  ReviewItem,
+  ApiReview,
   ReviewStatus,
   ReviewContentType,
-  ProjectProgress,
-} from './types/reviews.types';
+  CreateReviewBody,
+} from './services/reviews.service';

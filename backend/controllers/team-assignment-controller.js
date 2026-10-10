@@ -17,9 +17,7 @@ export const assignTeamToClient = async (req, res) => {
 };
 
 export const listClientTeams = async (req, res) => {
-  const teams = await teamAssignmentService.listClientTeams(
-    req.params.clientId,
-  );
+  const teams = await teamAssignmentService.listClientTeams(req.params.clientId);
 
   res.status(200).json({
     success: true,
@@ -28,10 +26,7 @@ export const listClientTeams = async (req, res) => {
 };
 
 export const removeTeamAssignment = async (req, res) => {
-  await teamAssignmentService.removeTeamAssignment(
-    req.params.clientId,
-    req.params.teamId,
-  );
+  await teamAssignmentService.removeTeamAssignment(req.params.clientId, req.params.teamId);
 
   res.status(200).json({
     success: true,

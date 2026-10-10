@@ -12,7 +12,6 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
-  Snackbar,
   Tab,
   Tabs,
   TextField,
@@ -20,35 +19,60 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import LockIcon from '@mui/icons-material/Lock';
-import ShieldIcon from '@mui/icons-material/Shield';
+import { Link as RouterLink } from 'react-router-dom';
 import PageContainer from '../../../shared/components/PageContainer';
 import { kineticPalette } from '../../../core/theme/tokens';
-import { MOCK_PROFILE, MOCK_PROFILE_ACTIVITY } from '../mock/profile.mock';
-import type { MockProfile } from '../types/profile.types';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { getApiErrorMessage } from '../../../core/api/errors';
+import { usersService } from '../../users/services/users.service';
 
-type ProfileTab = 'overview' | 'activity' | 'security';
+type ProfileTab = 'overview' | 'security';
 
-/** Profile screen: overview header, details card, activity + security tabs — all local mock state. */
+function initialsOf(name: string): string {
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+/** Profile screen: live identity, real name edit, password handoff — no mock data. */
 export function ProfilePage() {
-  const [profile, setProfile] = useState<MockProfile>(MOCK_PROFILE);
+  const { user, can } = useAuth();
   const [tab, setTab] = useState<ProfileTab>('overview');
   const [editOpen, setEditOpen] = useState(false);
-  const [draft, setDraft] = useState<MockProfile>(MOCK_PROFILE);
+  const [draftName, setDraftName] = useState(user?.name ?? '');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
-  const previewNote = (action: string) =>
-    setToast(`${action} is decorative in this UI preview — available in a future sprint.`);
+  if (!user) {
+    return null;
+  }
 
   function openEdit() {
-    setDraft(profile);
+    setDraftName(user?.name ?? '');
+    setNameError(null);
     setEditOpen(true);
   }
 
-  function handleSave() {
-    setProfile(draft);
-    setEditOpen(false);
-    setFlash(`${draft.name} updated (local preview — not saved).`);
+  async function handleSave() {
+    if (!draftName.trim()) {
+      setNameError('Full name is required.');
+      return;
+    }
+    if (!user) return;
+    setSaving(true);
+    try {
+      await usersService.update(user.id, { name: draftName.trim() });
+      setFlash('Profile name updated successfully. It refreshes on your next sign-in.');
+      setEditOpen(false);
+    } catch (error) {
+      setNameError(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -62,16 +86,18 @@ export function ProfilePage() {
             Profile
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            View and manage your workspace identity, contact details, and security preferences.
+            Your live workspace identity, backed by the backend.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button variant="outlined" startIcon={<LockIcon />} onClick={() => previewNote('Password change')}>
+          <Button component={RouterLink} to="/settings/profile" variant="outlined" startIcon={<LockIcon />}>
             Change Password
           </Button>
-          <Button variant="contained" startIcon={<EditIcon />} onClick={openEdit}>
-            Edit Profile
-          </Button>
+          {can('users:update') ? (
+            <Button variant="contained" startIcon={<EditIcon />} onClick={openEdit}>
+              Edit Profile
+            </Button>
+          ) : null}
         </Box>
       </Box>
 
@@ -86,11 +112,10 @@ export function ProfilePage() {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <Tabs value={tab} onChange={(_, value: ProfileTab) => setTab(value)} aria-label="Profile views" variant="scrollable" scrollButtons="auto">
               <Tab label="Overview" value="overview" />
-              <Tab label={`Activity ${MOCK_PROFILE_ACTIVITY.length}`} value="activity" />
               <Tab label="Security" value="security" />
             </Tabs>
             <Typography variant="caption" color="text.secondary">
-              Sync: Realtime • Demo workspace
+              Live session • {user.email}
             </Typography>
           </Box>
 
@@ -100,21 +125,16 @@ export function ProfilePage() {
                 <Card variant="outlined">
                   <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 4 }}>
                     <Avatar sx={{ bgcolor: kineticPalette.primary, width: 72, height: 72, fontSize: '1.5rem', fontWeight: 800 }}>
-                      {profile.initials}
+                      {initialsOf(user.name)}
                     </Avatar>
                     <Typography variant="h6" component="h3" fontWeight={800}>
-                      {profile.name}
+                      {user.name}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {profile.role} • {profile.team}
+                      {user.role}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
                       <Chip label="Active" size="small" color="success" variant="outlined" />
-                      {profile.twoFactor ? (
-                        <Chip icon={<ShieldIcon />} label="2FA Enabled" size="small" color="success" variant="outlined" />
-                      ) : (
-                        <Chip label="2FA Off" size="small" variant="outlined" />
-                      )}
                     </Box>
                   </CardContent>
                 </Card>
@@ -127,12 +147,9 @@ export function ProfilePage() {
                     </Typography>
                     <Grid container spacing={2}>
                       {[
-                        { label: 'Full name', value: profile.name },
-                        { label: 'Work email', value: profile.email },
-                        { label: 'Role', value: profile.role },
-                        { label: 'Team', value: profile.team },
-                        { label: 'Phone', value: profile.phone },
-                        { label: 'Location', value: profile.location },
+                        { label: 'Full name', value: user.name },
+                        { label: 'Work email', value: user.email },
+                        { label: 'Role', value: user.role },
                       ].map((field) => (
                         <Grid key={field.label} size={{ xs: 12, sm: 6 }}>
                           <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: '0.06em' }}>
@@ -150,38 +167,8 @@ export function ProfilePage() {
             </Grid>
           ) : null}
 
-          {tab === 'activity' ? (
-            <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              {MOCK_PROFILE_ACTIVITY.map((item) => (
-                <Card key={item.id} variant="outlined">
-                  <CardContent sx={{ py: 1.5 }}>
-                    <Typography variant="body1" fontWeight={700}>
-                      {item.title}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {item.detail} • {item.time}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              ))}
-            </Box>
-          ) : null}
-
           {tab === 'security' ? (
             <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <Card variant="outlined">
-                <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                  <Box>
-                    <Typography variant="body1" fontWeight={700}>
-                      Two-factor authentication
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {profile.twoFactor ? 'Enabled for this workspace account.' : 'Disabled — enable it in a future sprint.'}
-                    </Typography>
-                  </Box>
-                  <Chip icon={<ShieldIcon />} label={profile.twoFactor ? 'Enabled' : 'Disabled'} color={profile.twoFactor ? 'success' : 'default'} variant="outlined" />
-                </CardContent>
-              </Card>
               <Card variant="outlined">
                 <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                   <Box>
@@ -189,10 +176,10 @@ export function ProfilePage() {
                       Password
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Last changed 28 days ago (local preview).
+                      Change it any time from Profile Settings — the current session is invalidated afterwards.
                     </Typography>
                   </Box>
-                  <Button variant="outlined" startIcon={<LockIcon />} onClick={() => previewNote('Password change')}>
+                  <Button component={RouterLink} to="/settings/profile" variant="outlined" startIcon={<LockIcon />}>
                     Change Password
                   </Button>
                 </CardContent>
@@ -203,22 +190,25 @@ export function ProfilePage() {
       </Card>
 
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit profile (local preview)</DialogTitle>
+        <DialogTitle>Edit profile name</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <TextField label="Full name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} fullWidth />
-          <TextField label="Work email" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} fullWidth />
-          <TextField label="Phone" value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} fullWidth />
-          <TextField label="Location" value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} fullWidth />
+          <TextField
+            label="Full name"
+            value={draftName}
+            onChange={(e) => setDraftName(e.target.value)}
+            error={Boolean(nameError)}
+            helperText={nameError ?? ' '}
+            fullWidth
+            sx={{ mt: 0.5 }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave}>
-            Save changes
+          <Button variant="contained" onClick={() => void handleSave()} disabled={saving}>
+            {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Snackbar open={toast !== null} autoHideDuration={3500} onClose={() => setToast(null)} message={toast} />
     </PageContainer>
   );
 }

@@ -11,24 +11,22 @@ import {
   TableSortLabel,
   Typography,
 } from '@mui/material';
-import StatusChip, { type StatusTone } from '../../../shared/components/StatusChip';
-import { TASK_PRIORITY_LABEL, type MockTask, type TaskPriority } from '../types/tasks.types';
+import StatusChip from '../../../shared/components/StatusChip';
+import type { TaskRow } from '../types/tasks.types';
 
 type SortKey = 'title' | 'due';
 type Direction = 'asc' | 'desc';
 
-const PRIORITY_TONE: Record<TaskPriority, StatusTone> = {
-  high: 'error',
-  medium: 'warning',
-  low: 'default',
-};
-
 function assigneeInitials(name: string): string {
-  return name.split(' ').map((p) => p[0]).slice(0, 2).join('');
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('');
 }
 
 interface TaskTableProps {
-  tasks: MockTask[];
+  tasks: TaskRow[];
   variant: 'delayed' | 'completed';
   emptyMessage: string;
 }
@@ -88,7 +86,6 @@ export function TaskTable({ tasks, variant, emptyMessage }: TaskTableProps) {
                 {variant === 'delayed' ? 'Due' : 'Completed'}
               </TableSortLabel>
             </TableCell>
-            <TableCell>Priority</TableCell>
             <TableCell>Status</TableCell>
           </TableRow>
         </TableHead>
@@ -100,7 +97,7 @@ export function TaskTable({ tasks, variant, emptyMessage }: TaskTableProps) {
                   {task.title}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {task.project}
+                  {task.taskType}
                 </Typography>
               </TableCell>
               <TableCell>{task.client}</TableCell>
@@ -129,9 +126,6 @@ export function TaskTable({ tasks, variant, emptyMessage }: TaskTableProps) {
                     {task.completedDate}
                   </Typography>
                 )}
-              </TableCell>
-              <TableCell>
-                <StatusChip label={TASK_PRIORITY_LABEL[task.priority]} tone={PRIORITY_TONE[task.priority]} />
               </TableCell>
               <TableCell>
                 {variant === 'delayed' ? (

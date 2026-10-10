@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -17,42 +17,184 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import AddIcon from '@mui/icons-material/Add';
 import WarningIcon from '@mui/icons-material/Warning';
 import PageContainer from '../../../shared/components/PageContainer';
-import ActivityFeed from '../components/ActivityFeed';
+import ActivityFeed, { type ActivityItem } from '../components/ActivityFeed';
 import KpiCardView from '../components/KpiCardView';
-import PendingReviewsTable from '../components/PendingReviewsTable';
-import TeamAllocation from '../components/TeamAllocation';
-import WorkloadChart from '../components/WorkloadChart';
-import {
-  MOCK_ACTIVITY,
-  MOCK_ALLOCATION,
-  MOCK_KPIS,
-  MOCK_PENDING_REVIEWS,
-  MOCK_WORKLOAD,
-} from '../mock/dashboard.mock';
-import { DEMO_USER } from '../../../shared/components/workspace';
-import { MOCK_BRANDS } from '../../brand-performance/mock/brand.mock';
-import { MOCK_TEAMS } from '../../teams/mock/teams.mock';
-import { MOCK_TASK_ROWS } from '../../tasks/mock/tasks.mock';
+import PendingReviewsTable, { type PendingReviewRow } from '../components/PendingReviewsTable';
+import TeamAllocation, { type AllocationRow } from '../components/TeamAllocation';
+import WorkloadChart, { type WorkloadWeek } from '../components/WorkloadChart';
+import type { KpiCard } from '../types/dashboard.types';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { dashboardService, type DashboardAggregate } from '../../analytics/services/analytics.service';
+import { tasksService, type DelayedTaskItem } from '../../tasks/services/tasks.service';
+import { teamsService } from '../../teams/services/teams.service';
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diffMs) || diffMs < 0) return 'just now';
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+}
 
 type DashboardTab = 'executive' | 'agency';
 
-/** Executive dashboard screen. KPI cards, escalation banner, reviews, allocation, activity, workload — all mock data. */
+/** Executive dashboard screen. Live KPIs + agency overview; activity/tables stay curated preview. */
 export function DashboardPage({ initialTab = 'executive' }: { initialTab?: DashboardTab } = {}) {
+  const { user } = useAuth();
   const [view, setView] = useState<DashboardTab>(initialTab);
   const [escalationOpen, setEscalationOpen] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
+  const [aggregate, setAggregate] = useState<DashboardAggregate | null>(null);
+  const [delayedItems, setDelayedItems] = useState<DelayedTaskItem[]>([]);
+  const [allocationRows, setAllocationRows] = useState<AllocationRow[]>([]);
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
+  const [workloadWeeks, setWorkloadWeeks] = useState<WorkloadWeek[]>([]);
   const previewNote = (action: string) =>
     setToast(`${action} is decorative in this UI preview — available in a future sprint.`);
 
-  const completed = MOCK_TASK_ROWS.filter((t) => t.status === 'completed').length;
-  const delayed = MOCK_TASK_ROWS.filter((t) => t.status === 'delayed').length;
-  const totalMembers = MOCK_TEAMS.reduce((s, t) => s + t.members, 0);
-  const agencyStats = [
-    { label: 'Active brands', value: String(MOCK_BRANDS.length), sub: 'Retainers in scope' },
-    { label: 'Team members', value: String(totalMembers), sub: `${MOCK_TEAMS.length} delivery teams` },
-    { label: 'Completed tasks', value: String(completed), sub: 'Shipped in preview' },
-    { label: 'Delayed tasks', value: String(delayed), sub: 'Need intervention' },
+  useEffect(() => {
+    let cancelled = false;
+    async function loadWorkspace() {
+      try {
+        const [agg, delayed, teamsRes, tasksRes] = await Promise.all([
+          dashboardService.get(),
+          tasksService.delayed({ limit: 100 }),
+          teamsService.list({ limit: 100 }),
+          tasksService.list({ limit: 100 }),
+        ]);
+        if (cancelled) return;
+        setAggregate(agg);
+        setDelayedItems(delayed.items);
+
+        const totalOpenTasks = agg.tasks.total - (agg.tasks.byStatus.completed ?? 0);
+        const teamTaskCounts = new Map(agg.teams.byTeam.map((t) => [t.id, t.taskCount]));
+        setAllocationRows(
+          teamsRes.data.map((team) => {
+            const openTasks = teamTaskCounts.get(team.id) ?? 0;
+            const share = totalOpenTasks > 0 ? Math.round((openTasks / totalOpenTasks) * 100) : 0;
+            return {
+              id: team.id,
+              team: team.name,
+              detail: `${team.memberCount} members · ${openTasks} open tasks`,
+              percent: share,
+              note: `${share}% of open load`,
+              overCapacity: share >= 60 && openTasks > 0,
+            };
+          }),
+        );
+
+        const recent = [...tasksRes.data]
+          .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+          .slice(0, 5);
+        setActivityItems(
+          recent.map((t) => ({
+            id: t.id,
+            actor: 'Workspace',
+            text: `${t.status === 'completed' ? 'completed' : 'opened'} task “${t.title || t.taskType}”`,
+            time: timeAgo(t.status === 'completed' ? t.updatedAt : t.createdAt),
+          })),
+        );
+
+        const buckets = new Map<string, number>();
+        for (let w = 5; w >= 0; w--) {
+          const d = new Date();
+          d.setDate(d.getDate() - w * 7);
+          buckets.set(d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), 0);
+        }
+        const keys = [...buckets.keys()];
+        for (const t of tasksRes.data) {
+          const created = new Date(t.createdAt).getTime();
+          if (Number.isNaN(created)) continue;
+          const ageWeeks = Math.floor((Date.now() - created) / (7 * 86400000));
+          if (ageWeeks >= 0 && ageWeeks < 6) {
+            const key = keys[5 - ageWeeks];
+            buckets.set(key, (buckets.get(key) ?? 0) + 1);
+          }
+        }
+        setWorkloadWeeks([...buckets.entries()].map(([label, value]) => ({ label, value })));
+      } catch {
+        if (!cancelled) {
+          setAggregate(null);
+        }
+      }
+    }
+    void loadWorkspace();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pendingRows: PendingReviewRow[] = delayedItems.slice(0, 5).map((t) => ({
+    id: t.id,
+    title: t.title || t.taskType,
+    client: t.client?.name || '—',
+    lead: t.assignee?.name || 'Unassigned',
+    deadline: formatDate(t.deadline),
+    daysOverdue: t.daysOverdue,
+  }));
+
+  const delayedTotal = aggregate
+    ? aggregate.tasks.total - (aggregate.tasks.byStatus.completed ?? 0) - (aggregate.tasks.byStatus.cancelled ?? 0)
+    : delayedItems.length;
+
+  const firstName = user?.name.split(' ')[0] ?? 'there';
+
+  const liveKpis: KpiCard[] = [
+    {
+      id: 'clients',
+      eyebrow: 'Active clients',
+      value: String(aggregate?.clients.active ?? '—'),
+      caption: `${aggregate?.clients.total ?? '—'} total client accounts`,
+      stats: [{ label: `${aggregate?.clients.inactive ?? '—'} inactive`, value: '' }],
+    },
+    {
+      id: 'tasks',
+      eyebrow: 'Task completion',
+      value: aggregate ? `${Math.round(aggregate.tasks.completionRate * 100)}%` : '—',
+      caption: `${aggregate?.tasks.total ?? '—'} total tasks`,
+      stats: [
+        { label: `${aggregate?.tasks.byStatus.completed ?? '—'} completed`, value: '' },
+        {
+          label: `${(aggregate?.tasks.byStatus.pending ?? 0) + (aggregate?.tasks.byStatus.in_progress ?? 0)} open`,
+          value: '',
+        },
+      ],
+    },
+    {
+      id: 'teams',
+      eyebrow: 'Teams',
+      value: String(aggregate?.teams.active ?? '—'),
+      caption: `${aggregate?.teams.total ?? '—'} total teams`,
+      stats: [],
+    },
+    {
+      id: 'brands',
+      eyebrow: 'Brands',
+      value: String(aggregate?.brands.active ?? '—'),
+      caption: `${aggregate?.brands.total ?? '—'} total brands`,
+      stats: [],
+    },
   ];
+
+  const agencyStats = aggregate
+    ? [
+        { label: 'Active clients', value: String(aggregate.clients.active), sub: `${aggregate.clients.total} accounts` },
+        { label: 'Team capacity', value: String(aggregate.teams.total), sub: `${aggregate.teams.active} active teams` },
+        { label: 'Completed tasks', value: String(aggregate.tasks.byStatus.completed ?? 0), sub: 'Shipped' },
+        { label: 'Delayed tasks', value: String(aggregate.tasks.total - (aggregate.tasks.byStatus.completed ?? 0) - (aggregate.tasks.byStatus.cancelled ?? 0)), sub: 'Open, not completed' },
+      ]
+    : [];
 
   return (
     <PageContainer>
@@ -62,11 +204,10 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
             EXECUTIVE WORKSPACE • <Typography component="span" variant="caption" color="success.main" fontWeight={700}>● Live Syncing</Typography>
           </Typography>
           <Typography variant="h4" component="h2" fontWeight={800} sx={{ mt: 0.5 }}>
-            Good morning, {DEMO_USER.name.split(' ')[0]}
+            Good morning, {firstName}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Here is what requires your attention across 28 active client accounts today. 2 items are flagged for
-            intervention.
+            Live workspace totals below. Activity, allocation and workload derive from real records.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -114,13 +255,17 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
             <Grid size={{ xs: 12, lg: 6 }}>
               <Card>
                 <CardContent>
-                  <Typography variant="h6" component="h3" gutterBottom>Top brands by health</Typography>
-                  {MOCK_BRANDS.slice(0, 3).map((brand) => (
-                    <Box key={brand.id} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75 }}>
-                      <Typography variant="body2" fontWeight={600}>{brand.name}</Typography>
-                      <Typography variant="body2" color="text.secondary">{brand.health}% • {brand.onTime} on-time</Typography>
-                    </Box>
-                  ))}
+                  <Typography variant="h6" component="h3" gutterBottom>Tasks by status</Typography>
+                  {aggregate ? (
+                    Object.entries(aggregate.tasks.byStatus).map(([status, count]) => (
+                      <Box key={status} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75 }}>
+                        <Typography variant="body2" fontWeight={600}>{status}</Typography>
+                        <Typography variant="body2" color="text.secondary">{count} tasks</Typography>
+                      </Box>
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">Loading live totals…</Typography>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -128,12 +273,16 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
               <Card>
                 <CardContent>
                   <Typography variant="h6" component="h3" gutterBottom>Largest teams</Typography>
-                  {[...MOCK_TEAMS].sort((a, b) => b.members - a.members).slice(0, 3).map((team) => (
-                    <Box key={team.id} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75 }}>
-                      <Typography variant="body2" fontWeight={600}>{team.name}</Typography>
-                      <Typography variant="body2" color="text.secondary">{team.members} members • {team.activeProjects} projects</Typography>
-                    </Box>
-                  ))}
+                  {aggregate ? (
+                    [...aggregate.teams.byTeam].sort((a, b) => b.taskCount - a.taskCount).slice(0, 3).map((team) => (
+                      <Box key={team.id} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.75 }}>
+                        <Typography variant="body2" fontWeight={600}>{team.name}</Typography>
+                        <Typography variant="body2" color="text.secondary">{team.taskCount} tasks</Typography>
+                      </Box>
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">Loading live totals…</Typography>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -144,14 +293,14 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
       {view === 'executive' ? (
       <>
       <Grid container spacing={2}>
-        {MOCK_KPIS.map((kpi) => (
+        {liveKpis.map((kpi) => (
           <Grid key={kpi.id} size={{ xs: 12, sm: 6, lg: 3 }}>
             <KpiCardView kpi={kpi} />
           </Grid>
         ))}
       </Grid>
 
-      {escalationOpen ? (
+      {escalationOpen && delayedTotal > 0 ? (
         <Alert
           severity="error"
           icon={<WarningIcon />}
@@ -168,11 +317,12 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
           }
         >
           <Typography variant="body2" fontWeight={700}>
-            2 Overdue Deliverables Require Intervention
+            {delayedTotal} Overdue Deliverable{delayedTotal === 1 ? '' : 's'} Require{delayedTotal === 1 ? 's' : ''} Intervention
           </Typography>
           <Typography variant="body2">
-            Apex Performance Creative Set + TikTok SLA breached. Reassign capacity or resolve the escalation to restore
-            the on-time rate.
+            {pendingRows.slice(0, 2).map((r) => r.title).join(' + ') || 'Overdue work'}
+            {delayedTotal > 2 ? ` and ${delayedTotal - 2} more` : ''} breached
+            {delayedTotal === 1 ? ' its' : ' their'} deadline. Reassign capacity or resolve the escalation.
           </Typography>
         </Alert>
       ) : null}
@@ -183,22 +333,22 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="h6" component="h3">
-                  Pending Client Reviews & Approvals
+                  Items Needing Attention
                 </Typography>
-                <Chip label="Auto-reminders active" size="small" color="success" variant="outlined" />
+                <Chip label="Live overdue report" size="small" color="error" variant="outlined" />
               </Box>
-              <PendingReviewsTable rows={MOCK_PENDING_REVIEWS} />
+              <PendingReviewsTable rows={pendingRows} />
             </CardContent>
           </Card>
           <Card sx={{ mt: 2 }}>
             <CardContent>
               <Typography variant="h6" component="h3" gutterBottom>
-                Weekly Workload & Output Breakdown
+                Weekly Workload
               </Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Planned vs delivered output across operational pillars
+                New tasks created per week (live records)
               </Typography>
-              <WorkloadChart weeks={MOCK_WORKLOAD} />
+              <WorkloadChart weeks={workloadWeeks} caption={`${workloadWeeks.reduce((s, w) => s + w.value, 0)} tasks created in the last 6 weeks`} />
             </CardContent>
           </Card>
         </Grid>
@@ -209,9 +359,9 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
                 <Typography variant="h6" component="h3">
                   Team Allocation
                 </Typography>
-                <Chip label="Weekly SLA" size="small" variant="outlined" />
+                <Chip label="Live load" size="small" variant="outlined" />
               </Box>
-              <TeamAllocation rows={MOCK_ALLOCATION} onOpenPlanner={() => previewNote('Resource planner')} />
+              <TeamAllocation rows={allocationRows} onOpenPlanner={() => previewNote('Resource planner')} />
             </CardContent>
           </Card>
           <Card sx={{ mt: 2 }}>
@@ -219,7 +369,7 @@ export function DashboardPage({ initialTab = 'executive' }: { initialTab?: Dashb
               <Typography variant="h6" component="h3" gutterBottom>
                 Live Activity
               </Typography>
-              <ActivityFeed items={MOCK_ACTIVITY} />
+              <ActivityFeed items={activityItems} />
             </CardContent>
           </Card>
         </Grid>

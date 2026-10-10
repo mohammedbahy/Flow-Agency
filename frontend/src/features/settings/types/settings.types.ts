@@ -1,3 +1,11 @@
+import type {
+  DeadlineDirection,
+  DeadlineTaskType,
+  DeadlineUnit,
+} from '../services/deadline-rules.service';
+
+export type { DeadlineTaskType, DeadlineUnit, DeadlineDirection };
+
 export interface AgencySettings {
   name: string;
   tagline: string;
@@ -34,40 +42,7 @@ export interface PasswordFormErrors {
   confirm?: string;
 }
 
-export type DeadlineAppliesTo = 'reviews' | 'tasks' | 'deliverables';
-export type DeadlineUnit = 'hours' | 'days';
-
-export interface DeadlineRule {
-  id: string;
-  name: string;
-  appliesTo: DeadlineAppliesTo;
-  limit: number;
-  unit: DeadlineUnit;
-  action: string;
-  enabled: boolean;
-}
-
-export interface DeadlineRuleForm {
-  name: string;
-  appliesTo: DeadlineAppliesTo;
-  limit: string;
-  unit: DeadlineUnit;
-  action: string;
-  enabled: boolean;
-}
-
-export interface DeadlineRuleErrors {
-  name?: string;
-  limit?: string;
-}
-
-export const DEADLINE_APPLIES_LABEL: Record<DeadlineAppliesTo, string> = {
-  reviews: 'Content reviews',
-  tasks: 'Tasks',
-  deliverables: 'Deliverables',
-};
-
-export function validateAgencySettings(values: AgencySettings): AgencySettingsErrors {
+export function validateAgencySettings(values: { name: string; email: string }): AgencySettingsErrors {
   const errors: AgencySettingsErrors = {};
   if (!values.name.trim()) errors.name = 'Agency name is required.';
   if (!values.email.trim()) {
@@ -101,14 +76,43 @@ export function validatePasswordForm(values: PasswordForm): PasswordFormErrors {
   return errors;
 }
 
+export interface DeadlineRuleForm {
+  taskType: DeadlineTaskType;
+  offsetValue: string;
+  offsetUnit: DeadlineUnit;
+  direction: DeadlineDirection;
+  active: boolean;
+}
+
+export interface DeadlineRuleErrors {
+  offsetValue?: string;
+}
+
+export const TASK_TYPE_LABEL: Record<DeadlineTaskType, string> = {
+  design: 'Design',
+  content: 'Content',
+  development: 'Development',
+  video: 'Video',
+  seo: 'SEO',
+  other: 'Other',
+};
+
+export const DIRECTION_LABEL: Record<DeadlineDirection, string> = {
+  before: 'Before due date',
+  after: 'After due date',
+};
+
 export function validateDeadlineRule(values: DeadlineRuleForm): DeadlineRuleErrors {
   const errors: DeadlineRuleErrors = {};
-  if (!values.name.trim()) errors.name = 'Rule name is required.';
-  const limit = Number(values.limit);
-  if (!values.limit.trim()) {
-    errors.limit = 'Time limit is required.';
-  } else if (!Number.isFinite(limit) || limit <= 0) {
-    errors.limit = 'Enter a positive number.';
+  const offset = Number(values.offsetValue);
+  if (!values.offsetValue.trim()) {
+    errors.offsetValue = 'Offset is required.';
+  } else if (!Number.isFinite(offset) || offset <= 0) {
+    errors.offsetValue = 'Enter a positive number.';
   }
   return errors;
+}
+
+export function describeRule(offsetValue: number, offsetUnit: DeadlineUnit, direction: DeadlineDirection): string {
+  return `${offsetValue} ${offsetUnit} ${direction === 'before' ? 'before' : 'after'} the due date`;
 }

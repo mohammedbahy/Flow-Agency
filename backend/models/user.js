@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // FLW-164: set to true when an admin creates the account with a temporary
+    // Set to true when an admin creates the account with a temporary
     // password; cleared once the user changes it. Exposed as `mustChangePassword`.
     mustChangePassword: {
       type: Boolean,

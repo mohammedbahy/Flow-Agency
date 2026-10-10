@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import {
+  Alert,
   Button,
   Dialog,
   DialogActions,
@@ -11,12 +13,12 @@ import {
   Select,
   TextField,
 } from '@mui/material';
-import { useState } from 'react';
+import type { BackendRole } from '../services/users.service';
 import {
-  USER_ROLES,
-  USER_TEAMS,
+  BACKEND_ROLES,
+  CREATABLE_ROLES,
   validateUserForm,
-  type MockUser,
+  type DirectoryUser,
   type UserFormErrors,
   type UserFormValues,
 } from '../types/users.types';
@@ -24,17 +26,18 @@ import {
 interface UserDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
-  initial?: MockUser | null;
+  initial?: DirectoryUser | null;
   onClose: () => void;
   onSubmit: (values: UserFormValues) => void;
+  submitting?: boolean;
 }
 
-/** Invite/edit team member dialog with client-side validation (local state only). */
-export function UserDialog({ open, mode, initial, onClose, onSubmit }: UserDialogProps) {
+/** Invite/edit team member dialog. Create requires a temporary password (backend policy). */
+export function UserDialog({ open, mode, initial, onClose, onSubmit, submitting = false }: UserDialogProps) {
   const [name, setName] = useState(initial?.name ?? '');
   const [email, setEmail] = useState(initial?.email ?? '');
-  const [role, setRole] = useState(initial?.role ?? USER_ROLES[3]);
-  const [team, setTeam] = useState(initial?.team ?? USER_TEAMS[1]);
+  const [role, setRole] = useState<BackendRole>(initial?.role ?? 'employee');
+  const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<UserFormErrors>({});
 
   const dialogKey = initial?.id ?? mode;
@@ -43,22 +46,30 @@ export function UserDialog({ open, mode, initial, onClose, onSubmit }: UserDialo
     setLastKey(dialogKey);
     setName(initial?.name ?? '');
     setEmail(initial?.email ?? '');
-    setRole(initial?.role ?? USER_ROLES[3]);
-    setTeam(initial?.team ?? USER_TEAMS[1]);
+    setRole(initial?.role ?? 'employee');
+    setPassword('');
     setErrors({});
   }
 
+  const roleOptions = mode === 'create' ? BACKEND_ROLES.filter((r) => CREATABLE_ROLES.includes(r.value)) : BACKEND_ROLES;
+
   function handleSubmit() {
-    const nextErrors = validateUserForm({ name, email, role, team });
+    const nextErrors = validateUserForm({ name, email, role, password }, mode === 'create');
     setErrors(nextErrors);
-    if (nextErrors.name ?? nextErrors.email) return;
-    onSubmit({ name: name.trim(), email: email.trim(), role, team });
+    if (nextErrors.name ?? nextErrors.email ?? nextErrors.password) return;
+    onSubmit({ name: name.trim(), email: email.trim(), role, password });
   }
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{mode === 'create' ? 'Invite Team Member' : 'Edit user'}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+        {mode === 'create' ? (
+          <Alert severity="info" role="status" sx={{ mt: 0.5 }}>
+            The member signs in with this temporary password and must change it on first login. Only
+            managers and employees can be invited here.
+          </Alert>
+        ) : null}
         <TextField
           id="user-full-name"
           label="Full name"
@@ -68,7 +79,7 @@ export function UserDialog({ open, mode, initial, onClose, onSubmit }: UserDialo
           helperText={errors.name ?? ' '}
           fullWidth
           required
-          sx={{ mt: 0.5 }}
+          sx={{ mt: mode === 'create' ? 0 : 0.5 }}
         />
         <TextField
           id="user-email"
@@ -82,37 +93,41 @@ export function UserDialog({ open, mode, initial, onClose, onSubmit }: UserDialo
           required
         />
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid size={{ xs: 12, sm: mode === 'create' ? 6 : 12 }}>
             <FormControl fullWidth>
               <InputLabel id="user-role-label">Role</InputLabel>
-              <Select labelId="user-role-label" id="user-role" label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
-                {USER_ROLES.map((r) => (
-                  <MenuItem key={r} value={r}>
-                    {r}
+              <Select labelId="user-role-label" id="user-role" label="Role" value={role} onChange={(e) => setRole(e.target.value as BackendRole)}>
+                {roleOptions.map((r) => (
+                  <MenuItem key={r.value} value={r.value}>
+                    {r.label}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <FormControl fullWidth>
-              <InputLabel id="user-team-label">Team</InputLabel>
-              <Select labelId="user-team-label" id="user-team" label="Team" value={team} onChange={(e) => setTeam(e.target.value)}>
-                {USER_TEAMS.map((t) => (
-                  <MenuItem key={t} value={t}>
-                    {t}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
+          {mode === 'create' ? (
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                id="user-password"
+                label="Temporary password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                error={Boolean(errors.password)}
+                helperText={errors.password ?? 'Min 8, upper + lower + digit + special'}
+                fullWidth
+                required
+              />
+            </Grid>
+          ) : null}
         </Grid>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">
           Cancel
         </Button>
-        <Button onClick={handleSubmit} variant="contained">
+        <Button onClick={handleSubmit} variant="contained" disabled={submitting}>
           {mode === 'create' ? 'Send invite' : 'Save changes'}
         </Button>
       </DialogActions>

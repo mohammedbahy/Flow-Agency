@@ -12,7 +12,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BusinessIcon from '@mui/icons-material/Business';
 import StyleIcon from '@mui/icons-material/Style';
@@ -35,6 +35,9 @@ import ChevronsRightIcon from '@mui/icons-material/ChevronRight';
 import { NavLink, useLocation } from 'react-router-dom';
 import { kineticPalette } from '../../core/theme/tokens';
 import { PRODUCT_EDITION, PRODUCT_NAME } from './workspace';
+import { useAuth } from '../../core/auth/AuthContext';
+import { reviewsService } from '../../features/reviews/services/reviews.service';
+import { tasksService } from '../../features/tasks/services/tasks.service';
 
 export const SIDEBAR_WIDTH = 232;
 export const SIDEBAR_COLLAPSED_WIDTH = 76;
@@ -45,6 +48,8 @@ interface NavEntry {
   icon: ReactNode;
   to?: string;
   badge?: number;
+  /** Live count source (fetched once per sidebar mount when signed in). */
+  liveBadge?: 'delayed' | 'reviews';
   badgeTone?: 'default' | 'primary' | 'error';
   future?: boolean;
 }
@@ -78,12 +83,12 @@ const DELIVERY_NAV: NavNode[] = [
     defaultOpen: true,
     children: [
       { kind: 'link', label: 'All Tasks', icon: <ChecklistIcon />, to: '/tasks' },
-      { kind: 'link', label: 'Delayed Tasks', icon: <ChecklistIcon />, to: '/tasks/delayed', badge: 5, badgeTone: 'error' },
+      { kind: 'link', label: 'Delayed Tasks', icon: <ChecklistIcon />, to: '/tasks/delayed', liveBadge: 'delayed', badgeTone: 'error' },
       { kind: 'link', label: 'Completed Tasks', icon: <ChecklistIcon />, to: '/tasks/completed' },
       { kind: 'link', label: 'Completion Rate', icon: <ChecklistIcon />, to: '/tasks/completion' },
     ],
   },
-  { kind: 'link', label: 'Reviews', icon: <RateReviewIcon />, to: '/reviews', badge: 4, badgeTone: 'primary' },
+  { kind: 'link', label: 'Reviews', icon: <RateReviewIcon />, to: '/reviews', liveBadge: 'reviews', badgeTone: 'primary' },
 ];
 
 const TEAMS_NAV: NavNode[] = [
@@ -98,7 +103,7 @@ const CONTENT_NAV: NavNode[] = [
 const ADMIN_NAV: NavNode[] = [
   { kind: 'link', label: 'Users & Teams', icon: <ManageAccountsIcon />, to: '/users' },
   { kind: 'link', label: 'Roles & Permissions', icon: <KeyIcon />, to: '/roles' },
-  { kind: 'link', label: 'Notifications', icon: <NotificationsIcon />, badge: 9, badgeTone: 'error', future: true },
+  { kind: 'link', label: 'Notifications', icon: <NotificationsIcon />, future: true },
 ];
 
 const UTILITY_NAV: NavNode[] = [
@@ -150,12 +155,15 @@ function NavLinkButton({
   entry,
   collapsed,
   current,
+  liveCounts,
 }: {
   entry: NavEntry;
   collapsed: boolean;
   current: string;
+  liveCounts: Record<string, number>;
 }) {
   const active = entry.to != null && isActive(current, entry.to);
+  const badgeValue = entry.liveBadge ? liveCounts[entry.liveBadge] : entry.badge;
   const button = (
     <ListItemButton
       component={entry.to != null ? NavLink : 'button'}
@@ -183,7 +191,7 @@ function NavLinkButton({
             primary={entry.label}
             primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: active ? 600 : 500 }}
           />
-          {entry.badge != null ? <Badge value={entry.badge} tone={entry.badgeTone} /> : null}
+          {badgeValue != null && badgeValue > 0 ? <Badge value={badgeValue} tone={entry.badgeTone} /> : null}
         </>
       ) : null}
     </ListItemButton>
@@ -204,6 +212,7 @@ function NavSection({
   current,
   openGroups,
   onToggleGroup,
+  liveCounts,
 }: {
   title: string;
   nodes: NavNode[];
@@ -211,6 +220,7 @@ function NavSection({
   current: string;
   openGroups: Record<string, boolean>;
   onToggleGroup: (label: string) => void;
+  liveCounts: Record<string, number>;
 }) {
   // Collapsed rail: flatten groups into their links.
   const flat: NavEntry[] = collapsed
@@ -229,11 +239,11 @@ function NavSection({
       ) : null}
       {collapsed
         ? flat.map((entry) => (
-            <NavLinkButton key={entry.label} entry={entry} collapsed current={current} />
+            <NavLinkButton key={entry.label} entry={entry} collapsed current={current} liveCounts={liveCounts} />
           ))
         : nodes.map((node) => {
             if (node.kind === 'link') {
-              return <NavLinkButton key={node.label} entry={node} collapsed={false} current={current} />;
+              return <NavLinkButton key={node.label} entry={node} collapsed={false} current={current} liveCounts={liveCounts} />;
             }
             const open = openGroups[node.label] ?? node.defaultOpen ?? false;
             const childActive = node.children.some((c) => c.to != null && isActive(current, c.to));
@@ -257,7 +267,7 @@ function NavSection({
                 <Collapse in={open} timeout="auto" unmountOnExit>
                   <Box sx={{ pl: 2 }}>
                     {node.children.map((child) => (
-                      <NavLinkButton key={child.label} entry={child} collapsed={false} current={current} />
+                      <NavLinkButton key={child.label} entry={child} collapsed={false} current={current} liveCounts={liveCounts} />
                     ))}
                   </Box>
                 </Collapse>
@@ -291,7 +301,28 @@ function SidebarContent({
     });
   }
 
-  const sectionProps = { collapsed, current, openGroups, onToggleGroup: toggleGroup };
+  const { user } = useAuth();
+  const [liveCounts, setLiveCounts] = useState<Record<string, number>>({});
+
+  // Live queue badges (overdue tasks, pending reviews).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    Promise.all([
+      tasksService.delayed({ limit: 1 }).catch(() => ({ pagination: { total: 0 } })),
+      reviewsService.list({ status: 'pending', limit: 1 }).catch(() => ({ pagination: { total: 0 } })),
+    ])
+      .then(([delayed, reviews]) => {
+        if (cancelled) return;
+        setLiveCounts({ delayed: delayed.pagination.total, reviews: reviews.pagination.total });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const sectionProps = { collapsed, current, openGroups, onToggleGroup: toggleGroup, liveCounts };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }} onClick={onNavigate}>

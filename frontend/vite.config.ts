@@ -7,6 +7,16 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    // Dev-only proxy: the Express backend has no CORS enabled, so the
+    // browser calls same-origin `/api/*` and Vite forwards them.
+    // Production must either serve both from one origin or enable CORS
+    // on the backend (backend team).
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port: 5173,

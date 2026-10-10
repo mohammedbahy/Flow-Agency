@@ -1,10 +1,15 @@
-// Clients feature barrel (Sprint 1 UI preview).
+// Clients feature barrel — live backend (`/api/v1/clients`).
 export { ClientsPage } from './pages/ClientsPage';
 export { ClientDialog } from './components/ClientDialog';
-export { MOCK_CLIENTS } from './mock/clients.mock';
+export { clientsService } from './services/clients.service';
 export { validateClientForm, CLIENT_STATUS_LABEL } from './types/clients.types';
 export type {
-  MockClient,
+  ApiClient,
+  BackendClientStatus,
+  CreateClientBody,
+} from './services/clients.service';
+export type {
+  ClientRow,
   ClientStatus,
   ClientFormValues,
   ClientFormErrors,

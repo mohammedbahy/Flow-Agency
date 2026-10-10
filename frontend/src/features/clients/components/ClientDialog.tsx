@@ -17,24 +17,25 @@ import {
   validateClientForm,
   type ClientFormErrors,
   type ClientFormValues,
+  type ClientRow,
   type ClientStatus,
-  type MockClient,
 } from '../types/clients.types';
 
 interface ClientDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
-  initial?: MockClient | null;
+  initial?: ClientRow | null;
   onClose: () => void;
   onSubmit: (values: ClientFormValues) => void;
+  submitting?: boolean;
 }
 
-/** Shared client create/edit dialog with validation (local state only). */
-export function ClientDialog({ open, mode, initial, onClose, onSubmit }: ClientDialogProps) {
+/** Shared client create/edit dialog — fields mirror `POST /api/v1/clients`. */
+export function ClientDialog({ open, mode, initial, onClose, onSubmit, submitting = false }: ClientDialogProps) {
   const [name, setName] = useState(initial?.name ?? '');
-  const [industry, setIndustry] = useState(initial?.industry ?? '');
-  const [contactName, setContactName] = useState(initial?.contactName ?? '');
-  const [contactEmail, setContactEmail] = useState(initial?.contactEmail ?? '');
+  const [email, setEmail] = useState(initial?.email ?? '');
+  const [phone, setPhone] = useState(initial?.phone ?? '');
+  const [description, setDescription] = useState(initial?.description ?? '');
   const [status, setStatus] = useState<ClientStatus>(initial?.status ?? 'active');
   const [errors, setErrors] = useState<ClientFormErrors>({});
 
@@ -43,22 +44,22 @@ export function ClientDialog({ open, mode, initial, onClose, onSubmit }: ClientD
   if (lastKey !== dialogKey) {
     setLastKey(dialogKey);
     setName(initial?.name ?? '');
-    setIndustry(initial?.industry ?? '');
-    setContactName(initial?.contactName ?? '');
-    setContactEmail(initial?.contactEmail ?? '');
+    setEmail(initial?.email ?? '');
+    setPhone(initial?.phone ?? '');
+    setDescription(initial?.description ?? '');
     setStatus(initial?.status ?? 'active');
     setErrors({});
   }
 
   function handleSubmit() {
-    const nextErrors = validateClientForm({ name, industry, contactName, contactEmail, status });
+    const nextErrors = validateClientForm({ name, email, phone, description, status });
     setErrors(nextErrors);
-    if (nextErrors.name ?? nextErrors.contactEmail) return;
+    if (nextErrors.name ?? nextErrors.email) return;
     onSubmit({
       name: name.trim(),
-      industry: industry.trim(),
-      contactName: contactName.trim(),
-      contactEmail: contactEmail.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      description: description.trim(),
       status,
     });
   }
@@ -81,56 +82,57 @@ export function ClientDialog({ open, mode, initial, onClose, onSubmit }: ClientD
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, sm: 6 }}>
             <TextField
-              id="client-industry"
-              label="Industry"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value)}
+              id="client-email"
+              label="Contact email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={Boolean(errors.email)}
+              helperText={errors.email ?? ' '}
               fullWidth
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6 }}>
-            <FormControl fullWidth>
-              <InputLabel id="client-status-label">Status</InputLabel>
-              <Select
-                labelId="client-status-label"
-                id="client-status"
-                label="Status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ClientStatus)}
-              >
-                {(Object.keys(CLIENT_STATUS_LABEL) as ClientStatus[]).map((s) => (
-                  <MenuItem key={s} value={s}>
-                    {CLIENT_STATUS_LABEL[s]}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TextField
+              id="client-phone"
+              label="Contact phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              fullWidth
+            />
           </Grid>
         </Grid>
         <TextField
-          id="client-contact-name"
-          label="Contact name"
-          value={contactName}
-          onChange={(e) => setContactName(e.target.value)}
+          id="client-description"
+          label="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          multiline
+          minRows={2}
           fullWidth
         />
-        <TextField
-          id="client-contact-email"
-          label="Contact email"
-          type="email"
-          value={contactEmail}
-          onChange={(e) => setContactEmail(e.target.value)}
-          error={Boolean(errors.contactEmail)}
-          helperText={errors.contactEmail ?? ' '}
-          fullWidth
-          required
-        />
+        <FormControl fullWidth sx={{ maxWidth: 240 }}>
+          <InputLabel id="client-status-label">Status</InputLabel>
+          <Select
+            labelId="client-status-label"
+            id="client-status"
+            label="Status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as ClientStatus)}
+          >
+            {(Object.keys(CLIENT_STATUS_LABEL) as ClientStatus[]).map((s) => (
+              <MenuItem key={s} value={s}>
+                {CLIENT_STATUS_LABEL[s]}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">
           Cancel
         </Button>
-        <Button onClick={handleSubmit} variant="contained">
+        <Button onClick={handleSubmit} variant="contained" disabled={submitting}>
           {mode === 'create' ? 'Add client' : 'Save changes'}
         </Button>
       </DialogActions>

@@ -1,12 +1,110 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { AuthProvider } from '../../core/auth/AuthContext';
+import type { StoredUser } from '../../core/auth/token-storage';
 import { appRoutes } from './router';
+
+vi.mock('../../features/users/services/users.service', () => ({
+  usersService: {
+    list: vi.fn(async () => ({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } })),
+    create: vi.fn(),
+    update: vi.fn(),
+    changeStatus: vi.fn(),
+    changeRole: vi.fn(),
+  },
+}));
+
+vi.mock('../../features/teams/services/teams.service', () => ({
+  teamsService: {
+    list: vi.fn(async () => ({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } })),
+    get: vi.fn(),
+    create: vi.fn(),
+    addMembers: vi.fn(),
+    removeMember: vi.fn(),
+    deleteTeam: vi.fn(),
+  },
+}));
+
+vi.mock('../../features/clients/services/clients.service', () => ({
+  clientsService: {
+    list: vi.fn(async () => ({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } })),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+}));
+
+vi.mock('../../features/tasks/services/tasks.service', () => ({
+  tasksService: {
+    list: vi.fn(async () => ({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } })),
+    delayed: vi.fn(async () => ({
+      items: [],
+      pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+    })),
+    completionRate: vi.fn(async () => ({ total: 0, completed: 0, notCompleted: 0, rate: 0 })),
+  },
+}));
+
+vi.mock('../../features/settings/services/deadline-rules.service', () => ({
+  deadlineRulesService: {
+    list: vi.fn(async () => []),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+  },
+}));
+
+vi.mock('../../features/reviews/services/reviews.service', () => ({
+  reviewsService: {
+    list: vi.fn(async () => ({
+      data: [],
+      pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+    })),
+    approve: vi.fn(),
+    reject: vi.fn(),
+  },
+}));
+
+const ADMIN_USER: StoredUser = {
+  id: 'test-admin',
+  name: 'Test Admin',
+  email: 'admin@test.co',
+  role: 'admin',
+  mustChangePassword: false,
+};
+
+const ALL_PERMISSIONS = [
+  'users:create',
+  'users:read',
+  'users:update',
+  'users:deactivate',
+  'users:change_role',
+  'teams:create',
+  'teams:read',
+  'teams:update',
+  'teams:delete',
+  'teams:manage_members',
+  'deadline_rules:read',
+  'deadline_rules:manage',
+  'tasks:create',
+  'tasks:read',
+  'tasks:update',
+  'tasks:delete',
+  'reports:read',
+];
 
 function renderAt(path: string) {
   const router = createMemoryRouter(appRoutes, { initialEntries: [path] });
-  render(<RouterProvider router={router} />);
+  render(
+    <AuthProvider initialUser={ADMIN_USER} initialPermissions={ALL_PERMISSIONS}>
+      <RouterProvider router={router} />
+    </AuthProvider>,
+  );
 }
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 /** Route-level regression test against the real route configuration. */
 describe('router', () => {
@@ -17,7 +115,7 @@ describe('router', () => {
 
   it('renders the dashboard at /dashboard', async () => {
     renderAt('/dashboard');
-    expect(await screen.findByRole('heading', { name: /good morning, elena/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /good morning, test/i })).toBeInTheDocument();
   });
 
   it('renders users at /users', async () => {
@@ -116,4 +214,9 @@ describe('router', () => {
     renderAt('/settings/deadline-rules');
     expect(await screen.findByRole('heading', { name: /deadline rules/i })).toBeInTheDocument();
   });
+
+  // NOTE: the signed-out redirect (<Navigate> inside ProtectedRoute) cannot
+  // run under jsdom — react-router's client-side navigation crashes on the
+  // jsdom AbortSignal implementation. Guard behavior is verified live
+  // (signed-out visit to any app route lands on /login).
 });

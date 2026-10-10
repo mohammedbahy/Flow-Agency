@@ -26,6 +26,9 @@ export const PERMISSIONS = Object.freeze({
   TASKS_UPDATE: "tasks:update",
   TASKS_DELETE: "tasks:delete",
 
+  REVIEWS_READ: "reviews:read",
+  REVIEWS_MANAGE: "reviews:manage",
+
   REPORTS_READ: "reports:read",
 });
 
@@ -43,11 +46,14 @@ export const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.TASKS_CREATE,
     PERMISSIONS.TASKS_READ,
     PERMISSIONS.TASKS_UPDATE,
+    PERMISSIONS.REVIEWS_READ,
+    PERMISSIONS.REVIEWS_MANAGE,
   ]),
   [ROLES.EMPLOYEE]: Object.freeze([
     PERMISSIONS.TEAMS_READ,
     PERMISSIONS.TASKS_READ,
     PERMISSIONS.TASKS_UPDATE,
+    PERMISSIONS.REVIEWS_READ,
   ]),
 });
 

@@ -1,42 +1,40 @@
-export type ClientStatus = 'active' | 'at-risk' | 'paused';
+import type { BackendClientStatus } from '../services/clients.service';
 
-export interface MockClient {
+export type ClientStatus = BackendClientStatus;
+
+export interface ClientRow {
   id: string;
   name: string;
-  industry: string;
-  contactName: string;
-  contactEmail: string;
-  brands: string[];
-  activeProjects: number;
+  description: string;
+  email: string;
+  phone: string;
   status: ClientStatus;
+  createdAt: string;
 }
 
 export interface ClientFormValues {
   name: string;
-  industry: string;
-  contactName: string;
-  contactEmail: string;
+  email: string;
+  phone: string;
+  description: string;
   status: ClientStatus;
 }
 
 export interface ClientFormErrors {
   name?: string;
-  contactEmail?: string;
+  email?: string;
 }
 
 export const CLIENT_STATUS_LABEL: Record<ClientStatus, string> = {
   active: 'Active',
-  'at-risk': 'At risk',
-  paused: 'Paused',
+  inactive: 'Inactive',
 };
 
 export function validateClientForm(values: ClientFormValues): ClientFormErrors {
   const errors: ClientFormErrors = {};
   if (!values.name.trim()) errors.name = 'Client name is required.';
-  if (!values.contactEmail.trim()) {
-    errors.contactEmail = 'Contact email is required.';
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.contactEmail.trim())) {
-    errors.contactEmail = 'Enter a valid email address.';
+  if (values.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
+    errors.email = 'Enter a valid email address.';
   }
   return errors;
 }

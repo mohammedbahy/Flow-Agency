@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   FormControl,
   InputLabel,
   MenuItem,
@@ -16,28 +15,40 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import PageContainer from '../../../shared/components/PageContainer';
+import { getApiErrorMessage } from '../../../core/api/errors';
+import { usersService, type BackendRole } from '../services/users.service';
 import {
-  USER_ROLES,
-  USER_TEAMS,
+  BACKEND_ROLES,
+  CREATABLE_ROLES,
   validateUserForm,
   type UserFormErrors,
 } from '../types/users.types';
 
-/** Add User screen: full-page invite form with the same validation as the Users dialog — local preview only. */
+/** Add User screen: full-page invite form — creates via `POST /api/v1/users`. */
 export function AddUserPage() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<string>(USER_ROLES[3]);
-  const [team, setTeam] = useState<string>(USER_TEAMS[1]);
+  const [role, setRole] = useState<BackendRole>('employee');
+  const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<UserFormErrors>({});
-  const [flash, setFlash] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit() {
-    const nextErrors = validateUserForm({ name, email, role, team });
+  async function handleSubmit() {
+    const nextErrors = validateUserForm({ name, email, role, password }, true);
     setErrors(nextErrors);
-    if (nextErrors.name ?? nextErrors.email) return;
-    setFlash(`Invite sent to ${name.trim()} (local preview — not saved).`);
+    setServerError(null);
+    if (nextErrors.name ?? nextErrors.email ?? nextErrors.password) return;
+    setSubmitting(true);
+    try {
+      const created = await usersService.create({ name: name.trim(), email: email.trim(), role, password });
+      navigate('/users', { state: { flash: `Invite sent to ${created.name} — temporary password set.` } });
+    } catch (error) {
+      setServerError(getApiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -51,7 +62,7 @@ export function AddUserPage() {
             Add User
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Invite a team member to the workspace. Uses the same validation as the Users directory dialog.
+            Invite a team member to the workspace. They sign in with the temporary password below.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -61,20 +72,17 @@ export function AddUserPage() {
         </Box>
       </Box>
 
-      {flash ? (
-        <Alert severity="success" role="status" onClose={() => setFlash(null)}>
-          {flash}
+      {serverError ? (
+        <Alert severity="error" role="alert" onClose={() => setServerError(null)}>
+          {serverError}
         </Alert>
       ) : null}
 
       <Card>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-            <Typography variant="h6" component="h3">
-              User details
-            </Typography>
-            <Chip label="Local preview — no backend call" size="small" variant="outlined" />
-          </Box>
+          <Typography variant="h6" component="h3" gutterBottom>
+            User details
+          </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 640 }}>
             <TextField
               label="Full name"
@@ -98,28 +106,29 @@ export function AddUserPage() {
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <FormControl fullWidth sx={{ minWidth: 200 }}>
                 <InputLabel id="add-user-role-label">Role</InputLabel>
-                <Select labelId="add-user-role-label" label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
-                  {USER_ROLES.map((r) => (
-                    <MenuItem key={r} value={r}>
-                      {r}
+                <Select labelId="add-user-role-label" label="Role" value={role} onChange={(e) => setRole(e.target.value as BackendRole)}>
+                  {BACKEND_ROLES.filter((r) => CREATABLE_ROLES.includes(r.value)).map((r) => (
+                    <MenuItem key={r.value} value={r.value}>
+                      {r.label}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <FormControl fullWidth sx={{ minWidth: 200 }}>
-                <InputLabel id="add-user-team-label">Team</InputLabel>
-                <Select labelId="add-user-team-label" label="Team" value={team} onChange={(e) => setTeam(e.target.value)}>
-                  {USER_TEAMS.map((t) => (
-                    <MenuItem key={t} value={t}>
-                      {t}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                label="Temporary password"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                error={Boolean(errors.password)}
+                helperText={errors.password ?? 'Min 8, upper + lower + digit + special'}
+                fullWidth
+                required
+              />
             </Box>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={handleSubmit}>
-                Send invite
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => void handleSubmit()} disabled={submitting}>
+                {submitting ? 'Sending…' : 'Send invite'}
               </Button>
               <Button variant="outlined" onClick={() => navigate('/users')}>
                 View Users List

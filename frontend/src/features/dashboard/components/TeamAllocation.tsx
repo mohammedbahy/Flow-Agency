@@ -1,13 +1,28 @@
 import { Box, Button, LinearProgress, Typography } from '@mui/material';
-import type { AllocationRow } from '../types/dashboard.types';
+
+export interface AllocationRow {
+  id: string;
+  team: string;
+  detail: string;
+  percent: number;
+  note: string;
+  overCapacity?: boolean;
+}
 
 interface TeamAllocationProps {
   rows: AllocationRow[];
   onOpenPlanner: () => void;
 }
 
-/** Team capacity bars with over-capacity highlighting. */
+/** Team load bars (live member + task counts). */
 export function TeamAllocation({ rows, onOpenPlanner }: TeamAllocationProps) {
+  if (rows.length === 0) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        No teams yet.
+      </Typography>
+    );
+  }
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {rows.map((row) => (
@@ -34,7 +49,7 @@ export function TeamAllocation({ rows, onOpenPlanner }: TeamAllocationProps) {
             value={Math.min(row.percent, 100)}
             color={row.overCapacity ? 'error' : 'primary'}
             sx={{ height: 8, borderRadius: 4 }}
-            aria-label={`${row.team} allocation ${row.percent} percent`}
+            aria-label={`${row.team} load ${row.percent} percent`}
           />
         </Box>
       ))}

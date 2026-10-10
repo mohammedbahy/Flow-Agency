@@ -18,51 +18,72 @@ import LockIcon from '@mui/icons-material/Lock';
 import MailIcon from '@mui/icons-material/Mail';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { getApiErrorMessage } from '../../../core/api/errors';
 import {
   validateLoginForm,
   type LoginFormErrors,
 } from '../types/auth.types';
 
 /**
- * Agency sign-in form.
- *
- * TEMPORARY demo flow (until the backend team lands real auth): a valid
- * form navigates straight to /dashboard with no session, token or user.
- * The Backend team replaces this with the real auth service (Axios →
- * /api/auth/*) during Sprint 1 integration.
+ * Agency sign-in form — real authentication against the Express backend
+ * (`POST /api/v1/auth/login`). On success the JWT session is stored
+ * (localStorage when "remember me" is on, sessionStorage otherwise) and
+ * the user lands on /dashboard (or `mustChangePassword` → profile).
  */
-export function LoginForm() {
+export function LoginForm({ adminOnly = false }: { adminOnly?: boolean }) {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('elena.rostova@nexusagency.co');
-  const [password, setPassword] = useState('preview-only-password');
+  const { login, logout, user } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<LoginFormErrors>({});
   const [touched, setTouched] = useState({ email: false, password: false });
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  // Already signed in → skip login.
+  if (user) {
+    navigate('/dashboard', { replace: true });
+  }
 
   const visibleErrors: LoginFormErrors = {
     email: touched.email ? errors.email : undefined,
     password: touched.password ? errors.password : undefined,
   };
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const nextErrors = validateLoginForm({ email, password, rememberMe });
     setErrors(nextErrors);
     setTouched({ email: true, password: true });
     setNotice(null);
+    setServerError(null);
     if (nextErrors.email ?? nextErrors.password) return;
-    // TEMP bypass: simulate latency, then enter the workspace openly.
     setSubmitting(true);
-    setTimeout(() => {
-      navigate('/dashboard', { replace: true });
-    }, 600);
+    try {
+      const loggedUser = await login(email.trim(), password, rememberMe);
+      if (adminOnly && loggedUser.role !== 'admin') {
+        logout();
+        setServerError('This console is restricted to administrators.');
+        return;
+      }
+      if (loggedUser.mustChangePassword) {
+        navigate('/settings/profile?reason=must-change-password', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    } catch (error) {
+      setServerError(getApiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleSso(provider: string) {
-    setNotice(`${provider} SSO is disabled in this UI preview — use Sign In to enter the demo workspace.`);
+    setNotice(`${provider} SSO is not configured — sign in with your agency email and password.`);
   }
 
   return (
@@ -79,6 +100,12 @@ export function LoginForm() {
       {notice ? (
         <Alert severity="info" role="status" onClose={() => setNotice(null)}>
           {notice}
+        </Alert>
+      ) : null}
+
+      {serverError ? (
+        <Alert severity="error" role="alert" onClose={() => setServerError(null)}>
+          {serverError}
         </Alert>
       ) : null}
 

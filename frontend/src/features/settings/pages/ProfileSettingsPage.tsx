@@ -15,9 +15,13 @@ import {
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import { useSearchParams } from 'react-router-dom';
 import PageContainer from '../../../shared/components/PageContainer';
 import PageHeader from '../../../shared/components/PageHeader';
-import { DEMO_USER } from '../../../shared/components/workspace';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { getApiErrorMessage } from '../../../core/api/errors';
+import { authService } from '../../authentication/services/auth.service';
+import { usersService } from '../../users/services/users.service';
 import {
   validatePasswordForm,
   validateProfileForm,
@@ -72,32 +76,61 @@ function PasswordField({
   );
 }
 
-/** Profile Settings screen: admin identity editing + mock password change. Nothing is persisted. */
+/** Profile Settings screen: live identity (PATCH /users/:id) + real password change. */
 export function ProfileSettingsPage() {
-  const [name, setName] = useState<string>(DEMO_USER.name);
-  const [email, setEmail] = useState<string>(DEMO_USER.email);
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const [name, setName] = useState<string>(user?.name ?? '');
+  const [email, setEmail] = useState<string>(user?.email ?? '');
   const [profileErrors, setProfileErrors] = useState<ProfileFormErrors>({});
+  const [savingProfile, setSavingProfile] = useState(false);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [passwordErrors, setPasswordErrors] = useState<PasswordFormErrors>({});
+  const [changingPassword, setChangingPassword] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  function handleSaveProfile() {
+  const initials = (user?.name ?? '?')
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  async function handleSaveProfile() {
     const nextErrors = validateProfileForm({ name, email });
     setProfileErrors(nextErrors);
     if (nextErrors.name ?? nextErrors.email) return;
-    setToast('Profile updated in local preview — nothing was sent to a backend.');
+    if (!user) return;
+    setSavingProfile(true);
+    try {
+      await usersService.update(user.id, { name: name.trim(), email: email.trim() });
+      setToast('Profile updated successfully.');
+    } catch (error) {
+      setToast(getApiErrorMessage(error));
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
-  function handleChangePassword() {
+  async function handleChangePassword() {
     const nextErrors = validatePasswordForm({ current, next, confirm });
     setPasswordErrors(nextErrors);
     if (nextErrors.current ?? nextErrors.next ?? nextErrors.confirm) return;
-    setCurrent('');
-    setNext('');
-    setConfirm('');
-    setToast('Password change is disabled in this preview — no password was changed.');
+    setChangingPassword(true);
+    try {
+      const message = await authService.changePassword(current, next);
+      setCurrent('');
+      setNext('');
+      setConfirm('');
+      // Backend bumps tokenVersion → current JWT is dead; sign in again.
+      setToast(`${message} Please sign in again.`);
+    } catch (error) {
+      setToast(getApiErrorMessage(error));
+    } finally {
+      setChangingPassword(false);
+    }
   }
 
   return (
@@ -105,8 +138,14 @@ export function ProfileSettingsPage() {
       <PageHeader
         eyebrow="Settings • Admin"
         title="Profile Settings"
-        subtitle="Your administrator identity and sign-in credentials. Changes stay in the local preview."
+        subtitle="Your administrator identity and sign-in credentials."
       />
+
+      {searchParams.get('reason') === 'must-change-password' ? (
+        <Alert severity="warning" role="status">
+          Your account requires a password change before continuing.
+        </Alert>
+      ) : null}
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, lg: 6 }}>
@@ -114,14 +153,14 @@ export function ProfileSettingsPage() {
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.main' }} aria-hidden>
-                  {DEMO_USER.initials}
+                  {initials}
                 </Avatar>
                 <Box>
                   <Typography variant="subtitle1" fontWeight={800}>
-                    {name}
+                    {name || user?.name}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {DEMO_USER.role} • Super Admin access
+                    {user?.role} • {user?.email}
                   </Typography>
                 </Box>
               </Box>
@@ -147,8 +186,8 @@ export function ProfileSettingsPage() {
                 required
               />
               <Box>
-                <Button variant="contained" onClick={handleSaveProfile}>
-                  Save profile
+                <Button variant="contained" onClick={handleSaveProfile} disabled={savingProfile}>
+                  {savingProfile ? 'Saving…' : 'Save profile'}
                 </Button>
               </Box>
             </CardContent>
@@ -160,15 +199,12 @@ export function ProfileSettingsPage() {
               <Typography variant="h6" component="h3">
                 Change password
               </Typography>
-              <Alert severity="info" role="status">
-                Mock interface only — passwords are never changed or transmitted in this preview.
-              </Alert>
               <PasswordField id="pw-current" label="Current password" value={current} onChange={setCurrent} error={passwordErrors.current} />
-              <PasswordField id="pw-new" label="New password" value={next} onChange={setNext} error={passwordErrors.next} helperText="At least 8 characters." />
+              <PasswordField id="pw-new" label="New password" value={next} onChange={setNext} error={passwordErrors.next} helperText="Min 8 chars, upper + lower + digit + special." />
               <PasswordField id="pw-confirm" label="Confirm new password" value={confirm} onChange={setConfirm} error={passwordErrors.confirm} />
               <Box>
-                <Button variant="contained" onClick={handleChangePassword}>
-                  Update password
+                <Button variant="contained" onClick={handleChangePassword} disabled={changingPassword}>
+                  {changingPassword ? 'Updating…' : 'Update password'}
                 </Button>
               </Box>
             </CardContent>

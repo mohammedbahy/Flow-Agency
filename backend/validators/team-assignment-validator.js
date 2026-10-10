@@ -1,22 +1,24 @@
+import mongoose from "mongoose";
 import HttpError from "../utils/http-error.js";
-import { assertValidObjectId } from "../utils/object-id.js";
+
+const ASSIGNMENT_FIELDS = ["teamId"];
 
 export const validateAssignTeamPayload = (body = {}) => {
   const errors = [];
-  const { teamId } = body;
 
-  if (teamId === undefined || teamId === null || teamId === "") {
-    errors.push({ field: "teamId", message: "teamId is required" });
-  } else {
-    try {
-      assertValidObjectId(teamId, "team id");
-    } catch {
-      errors.push({ field: "teamId", message: "teamId must be a valid id" });
+  for (const key of Object.keys(body)) {
+    if (!ASSIGNMENT_FIELDS.includes(key)) {
+      errors.push({ field: key, message: `Unknown field: ${key}` });
     }
   }
 
-  if (errors.length) {
+  if (typeof body.teamId !== "string" || !mongoose.isObjectIdOrHexString(body.teamId)) {
+    errors.push({ field: "teamId", message: "teamId must be a valid team id" });
+  }
+
+  if (errors.length > 0) {
     throw HttpError.badRequest("Validation failed", errors);
   }
-  return { teamId };
+
+  return { teamId: body.teamId };
 };

@@ -5,7 +5,7 @@ import { axiosInstance } from './axios';
  * services share one call style (`apiClient.get<T>(…)`).
  */
 export const apiClient = {
-  get: <T>(url: string, params?: unknown) =>
+  get: <T, P = unknown>(url: string, params?: P) =>
     axiosInstance.get<T>(url, { params }).then((r) => r.data),
   post: <T, B = unknown>(url: string, body?: B) =>
     axiosInstance.post<T>(url, body).then((r) => r.data),

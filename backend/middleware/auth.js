@@ -7,11 +7,19 @@ import HttpError from "../utils/http-error.js";
  * Verifies the `Authorization: Bearer <token>` header, loads the matching
  * user, and populates `req.user` (a Mongoose document exposing `_id` + `role`).
  *
+ * Integration seam: when `req.user` is already attached (test harness via
+ * `createApp({ identityMiddleware })`, or a future upstream authenticator),
+ * it is trusted as-is and no token check runs.
+ *
  * Guards fail closed: any missing/invalid/expired token yields 401 and the
  * request never reaches a controller.
  */
 export const requireAuth = async (req, res, next) => {
   try {
+    if (req.user?._id && req.user?.role) {
+      return next();
+    }
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {

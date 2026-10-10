@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   Card,
   CardContent,
+  CircularProgress,
   IconButton,
   Switch,
   Table,
@@ -21,38 +23,89 @@ import PageContainer from '../../../shared/components/PageContainer';
 import PageHeader from '../../../shared/components/PageHeader';
 import StatusChip from '../../../shared/components/StatusChip';
 import ConfirmDialog, { useConfirmDialog } from '../../../shared/components/ConfirmDialog';
+import { useAuth } from '../../../core/auth/AuthContext';
+import { getApiErrorMessage } from '../../../core/api/errors';
 import RuleDialog from '../components/RuleDialog';
-import { MOCK_DEADLINE_RULES } from '../mock/settings.mock';
-import { DEADLINE_APPLIES_LABEL, type DeadlineRule, type DeadlineRuleForm } from '../types/settings.types';
+import { deadlineRulesService, type ApiDeadlineRule } from '../services/deadline-rules.service';
+import { describeRule, TASK_TYPE_LABEL, type DeadlineRuleForm } from '../types/settings.types';
 
-/** Deadline Rules screen: SLA-style limits with create/edit/enable/delete. All local mock state. */
+/** Deadline Rules screen — live SLA rules (`/api/v1/deadline-rules`). */
 export function DeadlineRulesPage() {
-  const [rules, setRules] = useState<DeadlineRule[]>(MOCK_DEADLINE_RULES);
-  const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; rule: DeadlineRule | null } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<DeadlineRule | null>(null);
+  const { can } = useAuth();
+  const [rules, setRules] = useState<ApiDeadlineRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; rule: ApiDeadlineRule | null } | null>(null);
+  const [dialogBusy, setDialogBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ApiDeadlineRule | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const deleteDialog = useConfirmDialog();
 
-  function handleDialogSubmit(values: DeadlineRuleForm) {
-    if (dialog?.mode === 'create') {
-      const created: DeadlineRule = { id: `local-${Date.now()}`, ...values, limit: Number(values.limit) };
-      setRules((prev) => [...prev, created]);
-      setFlash(`Rule “${created.name}” added (local preview — not saved).`);
-    } else if (dialog?.rule) {
-      setRules((prev) =>
-        prev.map((r) => (r.id === dialog.rule?.id ? { ...r, ...values, limit: Number(values.limit) } : r)),
-      );
-      setFlash(`Rule “${values.name}” updated (local preview — not saved).`);
+  const canManage = can('deadline_rules:manage');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setRules(await deadlineRulesService.list());
+    } catch (error) {
+      setLoadError(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
     }
-    setDialog(null);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleDialogSubmit(values: DeadlineRuleForm) {
+    setDialogBusy(true);
+    try {
+      const body = {
+        taskType: values.taskType,
+        offsetValue: Number(values.offsetValue),
+        offsetUnit: values.offsetUnit,
+        direction: values.direction,
+        active: values.active,
+      };
+      if (dialog?.mode === 'create') {
+        await deadlineRulesService.create(body);
+        setFlash(`Rule for “${TASK_TYPE_LABEL[values.taskType]}” added successfully.`);
+      } else if (dialog?.rule) {
+        await deadlineRulesService.update(dialog.rule.id, body);
+        setFlash('Rule updated successfully.');
+      }
+      setDialog(null);
+      await load();
+    } catch (error) {
+      setFlash(getApiErrorMessage(error));
+    } finally {
+      setDialogBusy(false);
+    }
   }
 
-  function handleDelete() {
+  async function handleToggle(rule: ApiDeadlineRule) {
+    try {
+      await deadlineRulesService.update(rule.id, { active: !rule.active });
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, active: !r.active } : r)));
+    } catch (error) {
+      setFlash(getApiErrorMessage(error));
+    }
+  }
+
+  async function handleDelete() {
     if (!pendingDelete) return;
-    setRules((prev) => prev.filter((r) => r.id !== pendingDelete.id));
-    setFlash(`Rule “${pendingDelete.name}” deleted (local preview — not saved).`);
-    setPendingDelete(null);
-    deleteDialog.hide();
+    try {
+      await deadlineRulesService.remove(pendingDelete.id);
+      setFlash(`Rule for “${TASK_TYPE_LABEL[pendingDelete.taskType]}” deleted.`);
+      await load();
+    } catch (error) {
+      setFlash(getApiErrorMessage(error));
+    } finally {
+      setPendingDelete(null);
+      deleteDialog.hide();
+    }
   }
 
   return (
@@ -60,11 +113,13 @@ export function DeadlineRulesPage() {
       <PageHeader
         eyebrow="Settings • Delivery governance"
         title="Deadline Rules"
-        subtitle="Time limits and escalation actions for reviews, tasks and deliverables. Changes are local preview state."
+        subtitle="Automatic deadline calculation per task type. Changes persist to the backend."
         actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ mode: 'create', rule: null })}>
-            Add rule
-          </Button>
+          canManage ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ mode: 'create', rule: null })}>
+              Add rule
+            </Button>
+          ) : undefined
         }
       />
 
@@ -76,76 +131,87 @@ export function DeadlineRulesPage() {
 
       <Card>
         <CardContent>
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table aria-label="Deadline rules">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Rule</TableCell>
-                  <TableCell>Applies to</TableCell>
-                  <TableCell>Time limit</TableCell>
-                  <TableCell>Escalation action</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rules.map((rule) => (
-                  <TableRow key={rule.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={700}>
-                        {rule.name}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{DEADLINE_APPLIES_LABEL[rule.appliesTo]}</TableCell>
-                    <TableCell>
-                      {rule.limit} {rule.unit}
-                    </TableCell>
-                    <TableCell>{rule.action || '—'}</TableCell>
-                    <TableCell>
-                      <StatusChip label={rule.enabled ? 'Enabled' : 'Disabled'} tone={rule.enabled ? 'success' : 'default'} />
-                    </TableCell>
-                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                      <Switch
-                        checked={rule.enabled}
-                        onChange={() =>
-                          setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, enabled: !r.enabled } : r)))
-                        }
-                        aria-label={`${rule.enabled ? 'Disable' : 'Enable'} rule ${rule.name}`}
-                        size="small"
-                      />
-                      <IconButton size="small" aria-label={`Edit rule ${rule.name}`} onClick={() => setDialog({ mode: 'edit', rule })}>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label={`Delete rule ${rule.name}`}
-                        onClick={() => {
-                          setPendingDelete(rule);
-                          deleteDialog.show();
-                        }}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }} role="status" aria-label="Loading deadline rules">
+              <CircularProgress />
+            </Box>
+          ) : loadError ? (
+            <Alert severity="error" role="alert" action={<Button color="inherit" size="small" onClick={() => void load()}>Retry</Button>}>
+              {loadError}
+            </Alert>
+          ) : rules.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 3 }} align="center">
+              No deadline rules yet. {canManage ? 'Add the first rule to enable automatic deadlines.' : ''}
+            </Typography>
+          ) : (
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table aria-label="Deadline rules">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Task type</TableCell>
+                    <TableCell>Offset</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Actions</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {rules.map((rule) => (
+                    <TableRow key={rule.id} hover>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700}>
+                          {TASK_TYPE_LABEL[rule.taskType] ?? rule.taskType}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{describeRule(rule.offsetValue, rule.offsetUnit, rule.direction)}</TableCell>
+                      <TableCell>
+                        <StatusChip label={rule.active ? 'Enabled' : 'Disabled'} tone={rule.active ? 'success' : 'default'} />
+                      </TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                        <Switch
+                          checked={rule.active}
+                          disabled={!canManage}
+                          onChange={() => void handleToggle(rule)}
+                          aria-label={`${rule.active ? 'Disable' : 'Enable'} rule for ${rule.taskType}`}
+                          size="small"
+                        />
+                        {canManage ? (
+                          <>
+                            <IconButton size="small" aria-label={`Edit rule for ${rule.taskType}`} onClick={() => setDialog({ mode: 'edit', rule })}>
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              aria-label={`Delete rule for ${rule.taskType}`}
+                              onClick={() => {
+                                setPendingDelete(rule);
+                                deleteDialog.show();
+                              }}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
 
       {dialog ? (
-        <RuleDialog open mode={dialog.mode} initial={dialog.rule} onClose={() => setDialog(null)} onSubmit={handleDialogSubmit} />
+        <RuleDialog open mode={dialog.mode} initial={dialog.rule} onClose={() => setDialog(null)} onSubmit={(v) => void handleDialogSubmit(v)} submitting={dialogBusy} />
       ) : null}
 
       <ConfirmDialog
         open={deleteDialog.open}
         title="Delete this rule?"
-        message={pendingDelete ? `“${pendingDelete.name}” will be removed from the local preview.` : ''}
+        message={pendingDelete ? `The “${TASK_TYPE_LABEL[pendingDelete.taskType]}” rule will be removed.` : ''}
         confirmLabel="Delete"
         confirmColor="error"
-        onConfirm={handleDelete}
+        onConfirm={() => void handleDelete()}
         onClose={() => {
           deleteDialog.hide();
           setPendingDelete(null);

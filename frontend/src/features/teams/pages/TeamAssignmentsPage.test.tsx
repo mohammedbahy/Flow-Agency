@@ -1,30 +1,77 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { AuthProvider } from '../../../core/auth/AuthContext';
+import type { StoredUser } from '../../../core/auth/token-storage';
+import { teamsService } from '../services/teams.service';
 import TeamAssignmentsPage from './TeamAssignmentsPage';
 
-describe('TeamAssignmentsPage', () => {
-  it('validates that a project and member are selected', async () => {
-    render(
-      <MemoryRouter initialEntries={['/team/assignments']}>
-        <TeamAssignmentsPage />
-      </MemoryRouter>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /assign member/i }));
-    expect(await screen.findByText(/select a project/i)).toBeInTheDocument();
-  });
+vi.mock('../services/teams.service', () => ({
+  teamsService: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    addMembers: vi.fn(),
+    removeMember: vi.fn(),
+    deleteTeam: vi.fn(),
+  },
+}));
 
-  it('assigns a member locally and shows a preview notice', async () => {
+vi.mock('../../users/services/users.service', () => ({
+  usersService: {
+    list: vi.fn(async () => ({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } })),
+  },
+}));
+
+vi.mock('../../tasks/services/tasks.service', () => ({
+  tasksService: {
+    list: vi.fn(async () => ({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } })),
+  },
+}));
+
+const ADMIN_USER: StoredUser = {
+  id: 'admin-1',
+  name: 'Test Admin',
+  email: 'admin@test.co',
+  role: 'admin',
+  mustChangePassword: false,
+};
+
+const ALL_PERMISSIONS = ['teams:create', 'teams:read', 'teams:delete', 'teams:manage_members'];
+
+const API_TEAMS = [
+  {
+    id: 't1',
+    name: 'Creative & Design',
+    description: 'Brand systems',
+    status: 'active',
+    memberCount: 1,
+    members: [{ id: 'u1', name: 'Maya Lin', email: 'maya@test.co', role: 'employee' }],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+function seedTeams() {
+  vi.mocked(teamsService.list).mockResolvedValue({
+    data: API_TEAMS as never[],
+    pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+  });
+  vi.mocked(teamsService.get).mockResolvedValue(API_TEAMS[0] as never);
+}
+
+describe('TeamAssignmentsPage', () => {
+  it('validates that a team and member are selected', async () => {
+    seedTeams();
     render(
       <MemoryRouter initialEntries={['/team/assignments']}>
-        <TeamAssignmentsPage />
+        <AuthProvider initialUser={ADMIN_USER} initialPermissions={ALL_PERMISSIONS}>
+          <TeamAssignmentsPage />
+        </AuthProvider>
       </MemoryRouter>,
     );
-    fireEvent.mouseDown(screen.getByLabelText(/project/i));
-    fireEvent.click(await screen.findByRole('option', { name: /website relaunch/i }));
-    fireEvent.mouseDown(screen.getByLabelText(/team member/i));
-    fireEvent.click(await screen.findByRole('option', { name: /maya lin/i }));
+    await screen.findByText(/Creative & Design/);
     fireEvent.click(screen.getByRole('button', { name: /assign member/i }));
-    expect(await screen.findByText(/maya lin assigned to website relaunch/i)).toBeInTheDocument();
+    expect(await screen.findByText(/select a team/i)).toBeInTheDocument();
   });
 });

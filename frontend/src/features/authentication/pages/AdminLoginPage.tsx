@@ -4,7 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import LoginForm from '../components/LoginForm';
 import { PRODUCT_NAME } from '../../../shared/components/workspace';
 
-/** Admin Login screen: same sign-in form with an admin-scoped header — local preview only. */
+/** Admin Login screen: same sign-in form restricted to admins — real backend auth. */
 export function AdminLoginPage() {
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: 'background.default', p: 2 }}>
@@ -24,7 +24,7 @@ export function AdminLoginPage() {
             </Box>
             <Chip icon={<ShieldIcon />} label="ADMIN" size="small" color="primary" variant="outlined" sx={{ ml: 'auto' }} />
           </Box>
-          <LoginForm />
+          <LoginForm adminOnly />
           <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
             Not an admin? <RouterLink to="/login">Go to workspace sign-in</RouterLink>
           </Typography>

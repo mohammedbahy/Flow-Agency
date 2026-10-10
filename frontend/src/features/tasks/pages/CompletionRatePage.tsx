@@ -1,17 +1,38 @@
-import { useState } from 'react';
-import { Box, Card, CardContent, Chip, Grid, LinearProgress, Typography } from '@mui/material';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, LinearProgress, Typography } from '@mui/material';
 import PageContainer from '../../../shared/components/PageContainer';
-import SearchField from '../../../shared/components/SearchField';
-import { MOCK_TASK_ROWS } from '../mock/tasks.mock';
+import { getApiErrorMessage } from '../../../core/api/errors';
+import { tasksService } from '../services/tasks.service';
 
-/** Task Completion Rate: per-project completion bars — all local mock state. */
+/** Task Completion Rate: live aggregate (`GET /api/v1/reports/completion-rate`). */
 export function CompletionRatePage() {
-  const [query, setQuery] = useState('');
-  const q = query.trim().toLowerCase();
-  const rows = MOCK_TASK_ROWS.filter(
-    (t) => q.length === 0 || t.title.toLowerCase().includes(q) || t.project.toLowerCase().includes(q),
-  );
-  const avg = Math.round(rows.reduce((s, t) => s + t.completion, 0) / Math.max(rows.length, 1));
+  const [stats, setStats] = useState({ total: 0, completed: 0, notCompleted: 0, rate: 0 });
+  const [delayed, setDelayed] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [rateRes, delayedRes] = await Promise.all([
+        tasksService.completionRate(),
+        tasksService.delayed({ limit: 1 }),
+      ]);
+      setStats(rateRes);
+      setDelayed(delayedRes.pagination.total);
+    } catch (error) {
+      setLoadError(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const percent = Math.round(stats.rate * 100);
 
   return (
     <PageContainer>
@@ -24,32 +45,52 @@ export function CompletionRatePage() {
             Task Completion Rate
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Average completion across the visible tasks in this preview.
+            Live aggregate from the backend reports module.
           </Typography>
         </Box>
-        <Chip label={`Average ${avg}%`} color="success" variant="outlined" />
+        <Chip label={`${stats.completed} of ${stats.total} completed`} color="success" variant="outlined" />
       </Box>
       <Card>
         <CardContent>
-          <Box sx={{ maxWidth: 420, mb: 2 }}>
-            <SearchField label="Search tasks" placeholder="Search tasks or projects" value={query} onChange={(e) => setQuery(e.target.value)} fullWidth />
-          </Box>
-          <Grid container spacing={2}>
-            {rows.map((task) => (
-              <Grid key={task.id} size={{ xs: 12, sm: 6, lg: 4 }}>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }} role="status" aria-label="Loading completion rate">
+              <CircularProgress />
+            </Box>
+          ) : loadError ? (
+            <Alert severity="error" role="alert" action={<Button color="inherit" size="small" onClick={() => void load()}>Retry</Button>}>
+              {loadError}
+            </Alert>
+          ) : (
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                 <Card variant="outlined">
-                  <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Typography variant="body1" fontWeight={700}>{task.title}</Typography>
-                    <Typography variant="caption" color="text.secondary">{task.project} • {task.assignee}</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <LinearProgress variant="determinate" value={task.completion} sx={{ flexGrow: 1 }} aria-label={`${task.title} ${task.completion}%`} />
-                      <Typography variant="caption">{task.completion}%</Typography>
-                    </Box>
+                  <CardContent>
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>COMPLETION RATE</Typography>
+                    <Typography variant="h4" component="p" fontWeight={800}>{percent}%</Typography>
+                    <LinearProgress variant="determinate" value={percent} sx={{ mt: 1 }} aria-label={`Completion rate ${percent}%`} />
                   </CardContent>
                 </Card>
               </Grid>
-            ))}
-          </Grid>
+              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>TOTAL TASKS</Typography>
+                    <Typography variant="h4" component="p" fontWeight={800}>{stats.total}</Typography>
+                    <Typography variant="body2" color="text.secondary">{stats.notCompleted} still open</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Typography variant="caption" color="text.secondary" fontWeight={700}>DELAYED NOW</Typography>
+                    <Typography variant="h4" component="p" fontWeight={800}>{delayed}</Typography>
+                    <Typography variant="body2" color="text.secondary">Past deadline, not completed</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
         </CardContent>
       </Card>
     </PageContainer>

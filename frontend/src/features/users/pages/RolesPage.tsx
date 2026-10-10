@@ -1,20 +1,55 @@
-import { useState } from 'react';
-import { Alert, Box, Button, Card, CardContent, Chip, Tab, Tabs, Typography } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Tab, Tabs, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import PageContainer from '../../../shared/components/PageContainer';
 import SearchField from '../../../shared/components/SearchField';
-import { RolesPanel } from '../components/DirectoryPanels';
-import { MOCK_ROLES } from '../mock/users.mock';
+import { RolesPanel, type LiveRoleEntry } from '../components/DirectoryPanels';
+import { getApiErrorMessage } from '../../../core/api/errors';
+import { authService } from '../../authentication/services/auth.service';
+import { usersService } from '../services/users.service';
+import { BACKEND_ROLES } from '../types/users.types';
 
-/** Roles & Permissions directory: full-page view of the same role cards shown in Users — local mock state. */
+/** Roles & Permissions directory — live RBAC matrix with member counts. */
 export function RolesPage() {
   const [query, setQuery] = useState('');
-  const [flash, setFlash] = useState<string | null>(null);
+  const [roles, setRoles] = useState<LiveRoleEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [matrix, usersRes] = await Promise.all([
+        authService.permissionsMatrix(),
+        usersService.list({ limit: 100 }),
+      ]);
+      const memberCounts = new Map<string, number>();
+      for (const u of usersRes.data) {
+        memberCounts.set(u.role, (memberCounts.get(u.role) ?? 0) + 1);
+      }
+      setRoles(
+        matrix.map((row) => ({
+          role: row.role,
+          label: BACKEND_ROLES.find((r) => r.value === row.role)?.label ?? row.role,
+          members: memberCounts.get(row.role) ?? 0,
+          permissions: row.permissions,
+        })),
+      );
+    } catch (error) {
+      setLoadError(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const q = query.trim().toLowerCase();
-  const filtered = MOCK_ROLES.filter(
-    (r) => q.length === 0 || r.name.toLowerCase().includes(q) || r.permissions.some((p) => p.toLowerCase().includes(q)),
+  const filtered = roles.filter(
+    (r) => q.length === 0 || r.label.toLowerCase().includes(q) || r.permissions.some((p) => p.toLowerCase().includes(q)),
   );
 
   return (
@@ -28,42 +63,45 @@ export function RolesPage() {
             Roles & Permissions
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Review role scopes and permission keys. Same data as the Users directory roles tab.
+            Live role scopes from the backend permission matrix. Roles are fixed by the backend team.
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button component={RouterLink} to="/users" variant="outlined">
             Back to Users List
           </Button>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFlash('Role creation arrives with backend RBAC (local preview — not saved).')}>
-            New Role
-          </Button>
         </Box>
       </Box>
-
-      {flash ? (
-        <Alert severity="info" role="status" onClose={() => setFlash(null)}>
-          {flash}
-        </Alert>
-      ) : null}
 
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <Tabs value="roles" aria-label="Roles views" variant="scrollable" scrollButtons="auto">
-              <Tab label={`Roles ${MOCK_ROLES.length}`} value="roles" />
+              <Tab label={`Roles ${roles.length}`} value="roles" />
             </Tabs>
             <Chip label={`${filtered.length} shown`} size="small" variant="outlined" />
           </Box>
           <Box sx={{ mt: 2, mb: 2, maxWidth: 420 }}>
             <SearchField label="Search roles" placeholder="Search roles or permissions" value={query} onChange={(e) => setQuery(e.target.value)} fullWidth />
           </Box>
-          <RolesPanel roles={filtered} />
-          {filtered.length === 0 ? (
-            <Alert severity="info" sx={{ mt: 2 }} role="status">
-              No roles match “{query.trim()}” in this preview.
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }} role="status" aria-label="Loading roles">
+              <CircularProgress />
+            </Box>
+          ) : loadError ? (
+            <Alert severity="error" role="alert" action={<Button color="inherit" size="small" onClick={() => void load()}>Retry</Button>}>
+              {loadError}
             </Alert>
-          ) : null}
+          ) : (
+            <>
+              <RolesPanel roles={filtered} />
+              {filtered.length === 0 ? (
+                <Alert severity="info" sx={{ mt: 2 }} role="status">
+                  No roles match “{query.trim()}”.
+                </Alert>
+              ) : null}
+            </>
+          )}
         </CardContent>
       </Card>
     </PageContainer>

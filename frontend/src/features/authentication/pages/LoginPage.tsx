@@ -18,7 +18,6 @@ import RateReviewIcon from '@mui/icons-material/RateReview';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import { kineticPalette } from '../../../core/theme/tokens';
 import LoginForm from '../components/LoginForm';
 import { PRODUCT_NAME } from '../../../shared/components/workspace';
 
@@ -91,7 +90,7 @@ function BrandPanel() {
 
       <Chip
         icon={<CheckCircleIcon sx={{ color: '#A7F3D0 !important' }} />}
-        label="99.4% Client SLA on-time rate across 1,280+ milestones"
+        label="Client, brand, team, task and review workflows in one place"
         sx={{ alignSelf: 'flex-start', bgcolor: 'rgba(255,255,255,0.1)', color: '#FFFFFF', position: 'relative' }}
       />
 
@@ -124,26 +123,23 @@ function BrandPanel() {
         <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Box>
             <Typography variant="caption" sx={{ color: '#A5B4FC' }}>
-              Q3 Studio Throughput
+              Workspace Overview
             </Typography>
             <Typography variant="body2" fontWeight={700} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <TrendingUpIcon fontSize="small" sx={{ color: '#34D399' }} /> +34.2% velocity
+              <TrendingUpIcon fontSize="small" sx={{ color: '#34D399' }} /> Track delivery, reviews and throughput live
             </Typography>
           </Box>
         </Box>
       </Card>
 
       <Card sx={{ bgcolor: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', position: 'relative' }}>
-        <Box sx={{ p: 2, display: 'flex', gap: 1.5 }}>
-          <Avatar sx={{ bgcolor: kineticPalette.tertiary }}>ER</Avatar>
-          <Box>
-            <Typography variant="body2" sx={{ color: '#E0E7FF' }}>
-              “Unified our 60-person agency across 42 concurrent client campaigns with zero delivery drag.”
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#A5B4FC' }}>
-              Elena Rostova • VP of Client Operations, Nexus Agency
-            </Typography>
-          </Box>
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" sx={{ color: '#E0E7FF' }}>
+            One workspace for clients, brands, teams, tasks and reviews — backed by live backend data.
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#A5B4FC' }}>
+            Sign in to see your workspace figures update in real time.
+          </Typography>
         </Box>
       </Card>
     </Box>

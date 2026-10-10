@@ -1,5 +1,5 @@
-// Teams feature barrel (Sprint 1 UI preview).
+// Teams feature barrel — live backend (`/api/v1/teams`).
 export { TeamsPage } from './pages/TeamsPage';
 export { TeamAssignmentsPage } from './pages/TeamAssignmentsPage';
-export { MOCK_TEAMS, MOCK_ASSIGNMENTS, MOCK_PROJECTS_FOR_ASSIGNMENT } from './mock/teams.mock';
-export type { MockTeam, Assignment } from './types/teams.types';
+export { teamsService } from './services/teams.service';
+export type { ApiTeam, ApiTeamMember } from './services/teams.service';

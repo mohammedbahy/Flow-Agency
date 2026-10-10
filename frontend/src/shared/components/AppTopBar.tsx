@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AppBar,
   Avatar,
@@ -20,23 +20,48 @@ import AddIcon from '@mui/icons-material/Add';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import SearchIcon from '@mui/icons-material/Search';
 import { kineticPalette } from '../../core/theme/tokens';
-import { DEMO_USER } from './workspace';
+import { useAuth } from '../../core/auth/AuthContext';
+import { tasksService, type DelayedTaskItem } from '../../features/tasks/services/tasks.service';
 import { Link as RouterLink } from 'react-router-dom';
 
 interface AppTopBarProps {
   onMenuClick: () => void;
 }
 
-const MOCK_NOTIFICATIONS = [
-  { id: 'n1', title: 'Review requested', body: 'Mia Member submitted Homepage hero copy.', time: '12 min ago' },
-  { id: 'n2', title: 'SLA breach', body: 'Apex Performance Creative Set missed its TikTok SLA.', time: '1 hr ago' },
-  { id: 'n3', title: 'Approval granted', body: 'Sarah Miller approved the Brand voice one-pager.', time: '3 hrs ago' },
-];
-
-/** Workspace top bar: search, New menu, notifications, profile. Mock interactions only. */
+/** Workspace top bar: search, New menu, live notifications, live profile menu. */
 export function AppTopBar({ onMenuClick }: AppTopBarProps) {
+  const { user, logout } = useAuth();
   const [newAnchor, setNewAnchor] = useState<HTMLElement | null>(null);
   const [bellAnchor, setBellAnchor] = useState<HTMLElement | null>(null);
+  const [profileAnchor, setProfileAnchor] = useState<HTMLElement | null>(null);
+  const [notifications, setNotifications] = useState<DelayedTaskItem[]>([]);
+  const [notificationTotal, setNotificationTotal] = useState(0);
+
+  // Live overdue items power the notification center (no notification API yet).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    tasksService
+      .delayed({ limit: 5 })
+      .then((res) => {
+        if (cancelled) return;
+        setNotifications(res.items);
+        setNotificationTotal(res.pagination.total);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const displayName = user?.name ?? 'Signed out';
+  const displayRole = user?.role ?? '';
+  const initials = displayName
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
 
   return (
     <AppBar
@@ -84,8 +109,8 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           <MenuItem disabled>New Client (future sprint)</MenuItem>
         </Menu>
         <Tooltip title="Notifications">
-          <IconButton aria-label="Notifications, 3 unread" onClick={(e) => setBellAnchor(e.currentTarget)} aria-haspopup="menu">
-            <Badge badgeContent={3} color="error">
+          <IconButton aria-label={`Notifications, ${notificationTotal} unread`} onClick={(e) => setBellAnchor(e.currentTarget)} aria-haspopup="menu">
+            <Badge badgeContent={notificationTotal} color="error">
               <NotificationsIcon />
             </Badge>
           </IconButton>
@@ -96,43 +121,70 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           onClose={() => setBellAnchor(null)}
           slotProps={{ paper: { sx: { width: 340 } } }}
         >
-          {MOCK_NOTIFICATIONS.map((n) => (
-            <MenuItem key={n.id} onClick={() => setBellAnchor(null)} sx={{ whiteSpace: 'normal' }}>
-              <Box>
-                <Typography variant="body2" fontWeight={600}>
-                  {n.title}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {n.body}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {n.time}
-                </Typography>
-              </Box>
+          {notifications.length === 0 ? (
+            <MenuItem onClick={() => setBellAnchor(null)}>
+              <Typography variant="body2" color="text.secondary">
+                All clear — nothing overdue right now.
+              </Typography>
             </MenuItem>
-          ))}
+          ) : (
+            notifications.map((n) => (
+              <MenuItem key={n.id} onClick={() => setBellAnchor(null)} sx={{ whiteSpace: 'normal' }}>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>
+                    Overdue: {n.title || n.taskType}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {n.client?.name ?? 'No client'} · {n.daysOverdue}d overdue
+                  </Typography>
+                </Box>
+              </MenuItem>
+            ))
+          )}
           <Divider />
-          <MenuItem onClick={() => setBellAnchor(null)}>
+          <MenuItem component={RouterLink} to="/tasks/delayed" onClick={() => setBellAnchor(null)}>
             <Typography variant="body2" color="primary" fontWeight={600}>
-              View all notifications
+              View all overdue tasks
             </Typography>
           </MenuItem>
         </Menu>
-        <Box
-          component={RouterLink}
-          to="/profile"
-          sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.25, pl: 0.5, textDecoration: 'none', color: 'inherit' }}
-        >
-          <Avatar sx={{ bgcolor: kineticPalette.primary }}>{DEMO_USER.initials}</Avatar>
+        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1.25, pl: 0.5 }}>
+          <Tooltip title={displayName}>
+            <IconButton
+              onClick={(e) => setProfileAnchor(e.currentTarget)}
+              aria-label="Account menu"
+              aria-haspopup="menu"
+              sx={{ p: 0 }}
+            >
+              <Avatar sx={{ bgcolor: kineticPalette.primary }}>{initials}</Avatar>
+            </IconButton>
+          </Tooltip>
           <Box sx={{ lineHeight: 1.2 }}>
             <Typography variant="body2" fontWeight={700} noWrap>
-              {DEMO_USER.name}
+              {displayName}
             </Typography>
             <Typography variant="caption" color="text.secondary" noWrap>
-              {DEMO_USER.role}
+              {displayRole}
             </Typography>
           </Box>
         </Box>
+        <Menu anchorEl={profileAnchor} open={Boolean(profileAnchor)} onClose={() => setProfileAnchor(null)}>
+          <MenuItem
+            component={RouterLink}
+            to="/profile"
+            onClick={() => setProfileAnchor(null)}
+          >
+            Profile
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setProfileAnchor(null);
+              logout();
+            }}
+          >
+            Sign out
+          </MenuItem>
+        </Menu>
       </Toolbar>
     </AppBar>
   );

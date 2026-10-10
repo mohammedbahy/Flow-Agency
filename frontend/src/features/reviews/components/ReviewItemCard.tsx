@@ -13,22 +13,27 @@ import ImageIcon from '@mui/icons-material/Image';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import StatusChip, { type StatusTone } from '../../../shared/components/StatusChip';
 import ConfirmDialog, { useConfirmDialog } from '../../../shared/components/ConfirmDialog';
 import { kineticPalette } from '../../../core/theme/tokens';
-import {
-  REVIEW_STATUS_LABEL,
-  REVIEW_TYPE_LABEL,
-  type ReviewContentType,
-  type ReviewItem,
-  type ReviewStatus,
-} from '../types/reviews.types';
+import type { ApiReview, ReviewContentType, ReviewStatus } from '../services/reviews.service';
 
 const STATUS_TONE: Record<ReviewStatus, StatusTone> = {
   pending: 'warning',
   approved: 'success',
   rejected: 'error',
+};
+
+const STATUS_LABEL: Record<ReviewStatus, string> = {
+  pending: 'Awaiting review',
+  approved: 'Approved',
+  rejected: 'Needs changes',
+};
+
+const TYPE_LABEL: Record<ReviewContentType, string> = {
+  copy: 'Copy',
+  visual: 'Visual',
+  campaign: 'Campaign',
 };
 
 const THUMBNAIL_STYLE: Record<ReviewContentType, { bg: string; icon: ReactNode }> = {
@@ -37,20 +42,26 @@ const THUMBNAIL_STYLE: Record<ReviewContentType, { bg: string; icon: ReactNode }
   campaign: { bg: `linear-gradient(135deg, ${kineticPalette.primaryDark} 0%, #0C0F2E 100%)`, icon: <CampaignIcon fontSize="large" /> },
 };
 
-interface ReviewItemCardProps {
-  item: ReviewItem;
-  onApprove: (id: string) => void;
-  onReject: (id: string, feedback: string) => void;
-  onOpenProofing: (title: string) => void;
+function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
 }
 
-/** Single deliverable card: thumbnail, meta, preview, approve / request-revision actions. */
-export function ReviewItemCard({ item, onApprove, onReject, onOpenProofing }: ReviewItemCardProps) {
+interface ReviewItemCardProps {
+  item: ApiReview;
+  busy?: boolean;
+  canDecide: boolean;
+  onApprove: (id: string) => void;
+  onReject: (id: string, feedback: string) => void;
+}
+
+/** Single deliverable card: live content with approve / request-revision actions. */
+export function ReviewItemCard({ item, busy = false, canDecide, onApprove, onReject }: ReviewItemCardProps) {
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const approveDialog = useConfirmDialog();
-  const thumb = THUMBNAIL_STYLE[item.contentType];
+  const thumb = THUMBNAIL_STYLE[item.contentType] ?? THUMBNAIL_STYLE.copy;
   const decided = item.status !== 'pending';
 
   function handleSendBack() {
@@ -60,6 +71,10 @@ export function ReviewItemCard({ item, onApprove, onReject, onOpenProofing }: Re
     }
     onReject(item.id, feedback.trim());
   }
+
+  const meta = [item.client, item.project, item.submittedBy, formatDate(item.createdAt)]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <Card>
@@ -83,23 +98,26 @@ export function ReviewItemCard({ item, onApprove, onReject, onOpenProofing }: Re
           >
             {thumb.icon}
             <Typography variant="caption" fontWeight={700}>
-              {REVIEW_TYPE_LABEL[item.contentType]}
+              {TYPE_LABEL[item.contentType]}
             </Typography>
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 0.75 }}>
-              <StatusChip label={REVIEW_STATUS_LABEL[item.status]} tone={STATUS_TONE[item.status]} />
-              <StatusChip label={item.assetNote} tone="default" />
+              <StatusChip label={STATUS_LABEL[item.status]} tone={STATUS_TONE[item.status]} />
             </Box>
             <Typography variant="subtitle1" fontWeight={700}>
               {item.title}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {item.client} · {item.project} · {item.submittedBy} · {item.submittedAt}
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              {item.preview}
-            </Typography>
+            {meta ? (
+              <Typography variant="body2" color="text.secondary">
+                {meta}
+              </Typography>
+            ) : null}
+            {item.preview ? (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                {item.preview}
+              </Typography>
+            ) : null}
             {item.feedback ? (
               <Alert severity={item.status === 'approved' ? 'success' : 'warning'} sx={{ mt: 1.5 }}>
                 <strong>Reviewer note:</strong> {item.feedback}
@@ -108,7 +126,7 @@ export function ReviewItemCard({ item, onApprove, onReject, onOpenProofing }: Re
           </Box>
         </Box>
 
-        {!decided ? (
+        {!decided && canDecide ? (
           <Box sx={{ mt: 2 }}>
             {revisionOpen ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 1.5 }}>
@@ -124,7 +142,7 @@ export function ReviewItemCard({ item, onApprove, onReject, onOpenProofing }: Re
                   fullWidth
                 />
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button variant="contained" color="error" onClick={handleSendBack}>
+                  <Button variant="contained" color="error" onClick={handleSendBack} disabled={busy}>
                     Send back for revision
                   </Button>
                   <Button color="inherit" onClick={() => { setRevisionOpen(false); setFeedbackError(null); }}>
@@ -133,15 +151,11 @@ export function ReviewItemCard({ item, onApprove, onReject, onOpenProofing }: Re
                 </Box>
               </Box>
             ) : null}
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              <Button variant="text" startIcon={<OpenInFullIcon />} onClick={() => onOpenProofing(item.title)}>
-                Open Full-Screen Proofing Tool
-              </Button>
-              <Box sx={{ flexGrow: 1 }} />
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <Button variant="outlined" color="error" startIcon={<CloseIcon />} onClick={() => setRevisionOpen(true)}>
                 Request Revision
               </Button>
-              <Button variant="contained" color="success" startIcon={<CheckIcon />} onClick={approveDialog.show}>
+              <Button variant="contained" color="success" startIcon={<CheckIcon />} onClick={approveDialog.show} disabled={busy}>
                 Approve Deliverable
               </Button>
             </Box>
@@ -152,7 +166,7 @@ export function ReviewItemCard({ item, onApprove, onReject, onOpenProofing }: Re
       <ConfirmDialog
         open={approveDialog.open}
         title="Approve this deliverable?"
-        message="The decision applies to the local preview only and is not sent anywhere."
+        message="The approval is recorded in the backend immediately."
         confirmLabel="Approve"
         confirmColor="success"
         onConfirm={() => {

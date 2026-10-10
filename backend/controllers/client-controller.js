@@ -28,10 +28,7 @@ export const listClients = async (req, res) => {
 };
 
 export const getClientById = async (req, res) => {
-  const client = await clientService.getClientDetail(
-    req.params.clientId,
-    req.user,
-  );
+  const client = await clientService.getClientDetail(req.params.clientId, req.user);
 
   res.status(200).json({
     success: true,
