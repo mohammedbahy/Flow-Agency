@@ -45,6 +45,11 @@ describe('router', () => {
     expect(await screen.findByRole('heading', { name: /teams management/i })).toBeInTheDocument();
   });
 
+  it('renders team assignments at /team/assignments', async () => {
+    renderAt('/team/assignments');
+    expect(await screen.findByRole('heading', { name: /team assignments/i })).toBeInTheDocument();
+  });
+
   it('renders settings at /settings', async () => {
     renderAt('/settings');
     expect(await screen.findByRole('heading', { name: /^settings$/i })).toBeInTheDocument();
@@ -74,7 +79,7 @@ describe('router', () => {
 
   it('renders completion rate at /tasks/completion', async () => {
     renderAt('/tasks/completion');
-    expect(await screen.findByRole('tab', { name: /completion rate/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /task completion rate/i })).toBeInTheDocument();
   });
 
   it('renders delayed tasks at /tasks/delayed', async () => {
@@ -84,7 +89,7 @@ describe('router', () => {
 
   it('renders completed tasks at /tasks/completed', async () => {
     renderAt('/tasks/completed');
-    expect(await screen.findByRole('heading', { name: /^tasks$/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /completed tasks/i })).toBeInTheDocument();
   });
 
   it('renders agency overview inside dashboard at /agency', async () => {
@@ -92,13 +97,23 @@ describe('router', () => {
     expect(await screen.findByRole('heading', { name: /agency overview/i })).toBeInTheDocument();
   });
 
-  it('renders team assignment inside teams at /team-assignment', async () => {
-    renderAt('/team-assignment');
-    expect(await screen.findByRole('tab', { name: /assignment/i })).toBeInTheDocument();
-  });
-
   it('renders clients at /clients', async () => {
     renderAt('/clients');
-    expect(await screen.findByRole('heading', { name: /client management/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /clients management/i })).toBeInTheDocument();
+  });
+
+  it('renders agency settings at /settings/agency', async () => {
+    renderAt('/settings/agency');
+    expect(await screen.findByRole('heading', { name: /agency settings/i })).toBeInTheDocument();
+  });
+
+  it('renders profile settings at /settings/profile', async () => {
+    renderAt('/settings/profile');
+    expect(await screen.findByRole('heading', { name: /profile settings/i })).toBeInTheDocument();
+  });
+
+  it('renders deadline rules at /settings/deadline-rules', async () => {
+    renderAt('/settings/deadline-rules');
+    expect(await screen.findByRole('heading', { name: /deadline rules/i })).toBeInTheDocument();
   });
 });
