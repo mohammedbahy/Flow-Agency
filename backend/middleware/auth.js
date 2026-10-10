@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
+import { getPermissionsForRole } from "../constants/permissions.js";
 import HttpError from "../utils/http-error.js";
 
 /**
@@ -51,6 +52,34 @@ export const requireRole =
     }
 
     if (!allowedRoles.includes(req.user.role)) {
+      return next(
+        HttpError.forbidden(
+          "You do not have permission to perform this action",
+        ),
+      );
+    }
+
+    return next();
+  };
+
+/**
+ * Permission guard backed by the static matrix in `constants/permissions.js`
+ * (FLW-173). Usage: `requirePermission(PERMISSIONS.USERS_CREATE)`.
+ * Every listed permission is required. Must be mounted after `requireAuth`.
+ */
+export const requirePermission =
+  (...requiredPermissions) =>
+  (req, res, next) => {
+    if (!req.user) {
+      return next(HttpError.unauthorized("Authentication required"));
+    }
+
+    const granted = getPermissionsForRole(req.user.role);
+    const allowed = requiredPermissions.every((permission) =>
+      granted.includes(permission),
+    );
+
+    if (!allowed) {
       return next(
         HttpError.forbidden(
           "You do not have permission to perform this action",

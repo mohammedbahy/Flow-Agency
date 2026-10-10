@@ -1,8 +1,8 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
-import bcrypt from "bcrypt";
 import User from "../models/user.js";
 import { ROLES } from "../constants/roles.js";
+import bcrypt from "bcrypt";
 
 dotenv.config();
 
@@ -14,7 +14,7 @@ const BCRYPT_ROUNDS = 10;
 const seedAdmin = async () => {
   await mongoose.connect(process.env.MONGODB_URI);
 
-  const existing = await User.findOne({ email: EMAIL });
+  const existing = await User.findOne({ email: EMAIL.toLowerCase().trim() });
   if (existing) {
     console.log(`Admin user already exists: ${EMAIL}`);
     return;
@@ -24,9 +24,11 @@ const seedAdmin = async () => {
 
   await User.create({
     name: NAME,
-    email: EMAIL,
+    email: EMAIL.toLowerCase().trim(),
     password,
     role: ROLES.ADMIN,
+    status: "active",
+    mustChangePassword: false,
   });
 
   console.log("Admin user created:");
@@ -37,6 +39,8 @@ const seedAdmin = async () => {
 seedAdmin()
   .catch((error) => {
     console.error("Seed failed:", error.message);
-    process.exitCode = 1;
+    process.exit(1);
   })
-  .finally(() => mongoose.disconnect());
+  .finally(async () => {
+    await mongoose.connection.close();
+  });

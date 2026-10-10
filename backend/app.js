@@ -2,6 +2,12 @@ import express from "express";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
 import authRoutes from "./routes/auth-routes.js";
 import clientRoutes from "./routes/client-routes.js";
+import deadlineRuleRoutes from "./routes/deadline-rule-routes.js";
+import permissionRoutes from "./routes/permission-routes.js";
+import reportRoutes from "./routes/report-routes.js";
+import taskRoutes from "./routes/task-routes.js";
+import teamRoutes from "./routes/team-routes.js";
+import userRoutes from "./routes/user-routes.js";
 
 /**
  * Builds the Express application.
@@ -28,7 +34,13 @@ export const createApp = ({ identityMiddleware } = {}) => {
   });
 
   app.use("/api/v1/auth", authRoutes);
+  app.use("/api/v1/permissions", permissionRoutes);
+  app.use("/api/v1/users", userRoutes);
   app.use("/api/v1/clients", clientRoutes);
+  app.use("/api/v1/teams", teamRoutes);
+  app.use("/api/v1/deadline-rules", deadlineRuleRoutes);
+  app.use("/api/v1/tasks", taskRoutes);
+  app.use("/api/v1/reports", reportRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

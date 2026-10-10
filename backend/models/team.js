@@ -39,5 +39,7 @@ const teamSchema = new mongoose.Schema(
 );
 
 teamSchema.index({ name: 1 }, { unique: true });
+teamSchema.index({ members: 1 });
+teamSchema.index({ status: 1 });
 
 export default mongoose.model("Team", teamSchema);

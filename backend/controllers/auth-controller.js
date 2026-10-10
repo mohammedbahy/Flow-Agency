@@ -47,6 +47,12 @@ export const login = async (req, res) => {
     throw HttpError.unauthorized("Invalid email or password");
   }
 
+  if (user.status === "inactive") {
+    throw HttpError.forbidden(
+      "Account is deactivated. Please contact an administrator.",
+    );
+  }
+
   user.failedLoginAttempts = 0;
   user.lockedUntil = null;
   await user.save();
@@ -73,6 +79,7 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        mustChangePassword: user.mustChangePassword ?? false,
       },
     },
   });
@@ -114,6 +121,7 @@ export const changePassword = async (req, res) => {
   }
 
   user.password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  user.mustChangePassword = false;
   user.tokenVersion += 1;
   await user.save();
 
