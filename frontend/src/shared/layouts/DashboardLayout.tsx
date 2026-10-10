@@ -3,6 +3,7 @@ import { Box, Container } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import AppSidebar from '../components/AppSidebar';
 import AppTopBar from '../components/AppTopBar';
+import ScrollToTop from '../components/ScrollToTop';
 
 interface DashboardLayoutProps {
   children?: ReactNode;
@@ -17,6 +18,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      <ScrollToTop />
       <AppSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <AppTopBar onMenuClick={() => setMobileOpen(true)} />

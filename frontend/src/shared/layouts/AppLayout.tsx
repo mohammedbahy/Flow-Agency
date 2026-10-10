@@ -1,11 +1,13 @@
 import { Outlet } from 'react-router-dom';
 import { AppBar, Box, Container, Toolbar, Typography } from '@mui/material';
 import { APP_NAME } from '../../core/constants/app.constants';
+import ScrollToTop from '../components/ScrollToTop';
 
 /** Minimal application shell proving React + MUI render successfully. */
 export function AppLayout() {
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <ScrollToTop />
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div">

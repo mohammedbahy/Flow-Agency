@@ -16,9 +16,10 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ShieldIcon from '@mui/icons-material/Shield';
-import { useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import PageContainer from '../../../shared/components/PageContainer';
 import SearchField from '../../../shared/components/SearchField';
 import { AuditPanel, ClientUsersPanel, RolesPanel } from '../components/DirectoryPanels';
@@ -146,6 +147,9 @@ export function UsersPage() {
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button variant="outlined" startIcon={<FileDownloadIcon />} onClick={handleExportCsv}>
             Export CSV
+          </Button>
+          <Button component={RouterLink} to="/users/new" variant="outlined" startIcon={<PersonAddIcon />}>
+            Add User
           </Button>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ mode: 'create', user: null })}>
             Invite Team Member

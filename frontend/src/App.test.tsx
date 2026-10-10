@@ -10,7 +10,7 @@ describe('HomePage (foundation smoke test)', () => {
         <HomePage />
       </MemoryRouter>,
     );
-    expect(screen.getByText('Agency Management System')).toBeInTheDocument();
+    expect(screen.getByText('Neurteq Agency Management')).toBeInTheDocument();
   });
 
   it('links to all four Sprint 1 screens', () => {
