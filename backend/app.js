@@ -1,5 +1,6 @@
 import express from "express";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler.js";
+import authRoutes from "./routes/auth-routes.js";
 import clientRoutes from "./routes/client-routes.js";
 
 /**
@@ -26,6 +27,7 @@ export const createApp = ({ identityMiddleware } = {}) => {
     });
   });
 
+  app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/clients", clientRoutes);
 
   app.use(notFoundHandler);
