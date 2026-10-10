@@ -7,3 +7,12 @@ export interface MockTeam {
   lead: string;
   initials: string[];
 }
+
+export interface Assignment {
+  id: string;
+  project: string;
+  client: string;
+  memberName: string;
+  role: string;
+  allocation: number;
+}

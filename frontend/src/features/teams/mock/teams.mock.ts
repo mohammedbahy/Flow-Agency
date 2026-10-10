@@ -1,4 +1,4 @@
-import type { MockTeam } from '../types/teams.types';
+import type { Assignment, MockTeam } from '../types/teams.types';
 
 /**
  * MOCK teams — UI preview only.
@@ -41,4 +41,17 @@ export const MOCK_TEAMS: MockTeam[] = [
     lead: 'Elena Rostova',
     initials: ['ER', 'AK', 'SM', '+2'],
   },
+];
+
+export const MOCK_PROJECTS_FOR_ASSIGNMENT = [
+  { id: 'p1', name: 'Website relaunch', client: 'Apex Finish' },
+  { id: 'p2', name: 'Autumn campaign', client: 'Globex' },
+  { id: 'p3', name: 'Brand guidelines', client: 'Lumina Health' },
+  { id: 'p4', name: 'Social content Q4', client: 'Umbrella' },
+] as const;
+
+export const MOCK_ASSIGNMENTS: Assignment[] = [
+  { id: 'as1', project: 'Website relaunch', client: 'Apex Finish', memberName: 'David Park', role: 'Senior Designer', allocation: 50 },
+  { id: 'as2', project: 'Autumn campaign', client: 'Globex', memberName: 'Marcus Chen', role: 'Copywriter', allocation: 75 },
+  { id: 'as3', project: 'Brand guidelines', client: 'Lumina Health', memberName: 'Maya Lin', role: 'Account Manager', allocation: 25 },
 ];

@@ -8,17 +8,26 @@ import { DashboardPage } from '../../features/dashboard';
 import { UsersPage, AddUserPage, RolesPage } from '../../features/users';
 import { ReviewsPage } from '../../features/reviews';
 import { ProfilePage } from '../../features/profile';
-import { TeamsPage } from '../../features/teams';
-import { BrandPerformancePage } from '../../features/brand-performance';
-import { TasksPage } from '../../features/tasks';
+import { TeamsPage, TeamAssignmentsPage } from '../../features/teams';
+import { BrandPerformancePage } from '../../features/analytics';
+import { TasksPage, CompletionRatePage, DelayedTasksPage, CompletedTasksPage } from '../../features/tasks';
 import { ClientsPage } from '../../features/clients';
-import { SettingsPage } from '../../features/settings';
+import {
+  SettingsPage,
+  AgencySettingsPage,
+  ProfileSettingsPage,
+  DeadlineRulesPage,
+} from '../../features/settings';
 
 /**
- * Sprint 1 route table (UI preview — no auth guards so every screen
+ * Unified route table (UI preview — no auth guards so every screen
  * is directly reviewable via navigation and direct URL entry).
  *
- * Temporary demo flow (until backend auth lands in Sprint 1+):
+ * Merged from both team tracks (Oct 2026): duplicate screens were unified
+ * to a single route each (/clients, /teams, /tasks/delayed,
+ * /tasks/completed, /brand-performance).
+ *
+ * Temporary demo flow (until backend auth lands):
  * the Login screen's Sign In button navigates straight to /dashboard.
  *
  * Exported as data so tests can drive the exact same configuration
@@ -44,6 +53,14 @@ export const appRoutes: RouteObject[] = [
     ),
   },
   {
+    path: '/agency',
+    element: (
+      <DashboardLayout>
+        <DashboardPage initialTab="agency" />
+      </DashboardLayout>
+    ),
+  },
+  {
     path: '/users',
     element: (
       <DashboardLayout>
@@ -60,38 +77,6 @@ export const appRoutes: RouteObject[] = [
     ),
   },
   {
-    path: '/teams',
-    element: (
-      <DashboardLayout>
-        <TeamsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/team-assignment',
-    element: (
-      <DashboardLayout>
-        <TeamsPage initialTab="assignment" />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/reviews',
-    element: (
-      <DashboardLayout>
-        <ReviewsPage />
-      </DashboardLayout>
-    ),
-  },
-  {
-    path: '/profile',
-    element: (
-      <DashboardLayout>
-        <ProfilePage />
-      </DashboardLayout>
-    ),
-  },
-  {
     path: '/roles',
     element: (
       <DashboardLayout>
@@ -100,10 +85,26 @@ export const appRoutes: RouteObject[] = [
     ),
   },
   {
-    path: '/brand-performance',
+    path: '/teams',
     element: (
       <DashboardLayout>
-        <BrandPerformancePage />
+        <TeamsPage />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: '/team/assignments',
+    element: (
+      <DashboardLayout>
+        <TeamAssignmentsPage />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: '/clients',
+    element: (
+      <DashboardLayout>
+        <ClientsPage />
       </DashboardLayout>
     ),
   },
@@ -119,7 +120,7 @@ export const appRoutes: RouteObject[] = [
     path: '/tasks/completion',
     element: (
       <DashboardLayout>
-        <TasksPage initialTab="rate" />
+        <CompletionRatePage />
       </DashboardLayout>
     ),
   },
@@ -127,7 +128,7 @@ export const appRoutes: RouteObject[] = [
     path: '/tasks/delayed',
     element: (
       <DashboardLayout>
-        <TasksPage initialTab="delayed" />
+        <DelayedTasksPage />
       </DashboardLayout>
     ),
   },
@@ -135,23 +136,31 @@ export const appRoutes: RouteObject[] = [
     path: '/tasks/completed',
     element: (
       <DashboardLayout>
-        <TasksPage initialTab="completed" />
+        <CompletedTasksPage />
       </DashboardLayout>
     ),
   },
   {
-    path: '/agency',
+    path: '/reviews',
     element: (
       <DashboardLayout>
-        <DashboardPage initialTab="agency" />
+        <ReviewsPage />
       </DashboardLayout>
     ),
   },
   {
-    path: '/clients',
+    path: '/brand-performance',
     element: (
       <DashboardLayout>
-        <ClientsPage />
+        <BrandPerformancePage />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: '/profile',
+    element: (
+      <DashboardLayout>
+        <ProfilePage />
       </DashboardLayout>
     ),
   },
@@ -160,6 +169,30 @@ export const appRoutes: RouteObject[] = [
     element: (
       <DashboardLayout>
         <SettingsPage />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: '/settings/agency',
+    element: (
+      <DashboardLayout>
+        <AgencySettingsPage />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: '/settings/profile',
+    element: (
+      <DashboardLayout>
+        <ProfileSettingsPage />
+      </DashboardLayout>
+    ),
+  },
+  {
+    path: '/settings/deadline-rules',
+    element: (
+      <DashboardLayout>
+        <DeadlineRulesPage />
       </DashboardLayout>
     ),
   },
