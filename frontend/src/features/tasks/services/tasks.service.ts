@@ -54,13 +54,10 @@ export const tasksService = {
     items: DelayedTaskItem[];
     pagination: ApiPagination;
   }> {
-    // Report envelope nests the payload under data: { items, pagination }.
+    // Report envelope carries the items array in `data` with top-level `pagination`.
     return apiClient
-      .get<ApiEnvelope<{ items: DelayedTaskItem[]; pagination: ApiPagination }>, typeof query>(
-        '/reports/delayed-tasks',
-        query,
-      )
-      .then((res) => res.data);
+      .get<ApiEnvelope<DelayedTaskItem[]>, typeof query>('/reports/delayed-tasks', query)
+      .then((res) => ({ items: res.data, pagination: res.pagination! }));
   },
 
   completionRate(): Promise<CompletionRate> {

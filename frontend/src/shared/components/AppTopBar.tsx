@@ -45,8 +45,8 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
       .delayed({ limit: 5 })
       .then((res) => {
         if (cancelled) return;
-        setNotifications(res.items);
-        setNotificationTotal(res.pagination.total);
+        setNotifications(res.items ?? []);
+        setNotificationTotal(res.pagination?.total ?? 0);
       })
       .catch(() => undefined);
     return () => {

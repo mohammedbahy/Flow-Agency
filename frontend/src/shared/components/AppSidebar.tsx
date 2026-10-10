@@ -314,7 +314,7 @@ function SidebarContent({
     ])
       .then(([delayed, reviews]) => {
         if (cancelled) return;
-        setLiveCounts({ delayed: delayed.pagination.total, reviews: reviews.pagination.total });
+        setLiveCounts({ delayed: delayed.pagination?.total ?? 0, reviews: reviews.pagination?.total ?? 0 });
       })
       .catch(() => undefined);
     return () => {
